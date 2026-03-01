@@ -1,16 +1,6 @@
 // ═══════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════
-const API_KEY = import.meta.env.VITE_FRED_API_KEY;
-
-const SERIES = {
-  HY:    'BAMLH0A0HYM2',    // US HY Total
-  BB:    'BAMLH0A1HYBB',    // BB
-  B:     'BAMLH0A2HYB',     // Single-B
-  CCC:   'BAMLH0A3HYC',     // CCC & Lower
-  EMHY:  'BAMLEMHBHYCRPIOAS' // EM HY
-};
-
 const COLORS = {
   HY:   '#06b6d4',
   BB:   '#22c55e',
@@ -43,32 +33,21 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ═══════════════════════════════════════════
-// FRED API
+// DATA LOADING
 // ═══════════════════════════════════════════
-async function fetchSeries(seriesId) {
-  const url = `/fred/fred/series/observations?series_id=${seriesId}&api_key=${API_KEY}&file_type=json&sort_order=asc`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${seriesId}`);
-  const json = await res.json();
-  return json.observations
-    .filter(d => d.value !== '.')
-    .map(d => ({ date: parseDate(d.date), value: +d.value }));
-}
-
 async function startFetch() {
-  if (!API_KEY) {
-    console.error('VITE_FRED_API_KEY が設定されていません。.envファイルを確認してください。');
-    return;
-  }
-
   try {
-    const entries = Object.entries(SERIES);
-    const results = await Promise.all(entries.map(([, id]) => fetchSeries(id)));
-    entries.forEach(([key], i) => { allData[key] = results[i]; });
-
+    const res = await fetch('./data/fred.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    Object.entries(json.series).forEach(([key, values]) => {
+      allData[key] = values.map(d => ({ date: parseDate(d.date), value: d.value }));
+    });
+    document.getElementById('lastUpdate').textContent =
+      `最終更新: ${json.lastUpdated.slice(0, 10)}`;
     renderAll();
   } catch (e) {
-    console.error('データ取得エラー:', e.message);
+    console.error('データ読み込みエラー:', e.message);
   }
 }
 

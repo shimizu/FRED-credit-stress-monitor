@@ -4,7 +4,6 @@ import legacy from '@vitejs/plugin-legacy'
 export default defineConfig({
   root: 'src',
   base: "./",
-  envDir: '..',
   publicDir: '../public',
   plugins: [
     legacy({
@@ -12,14 +11,7 @@ export default defineConfig({
     })
   ],
   server: {
-    open: true,
-    proxy: {
-      '/fred': {
-        target: 'https://api.stlouisfed.org',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/fred/, '')
-      }
-    }
+    open: true
   },
   build: {
     outDir: '../dist'
