@@ -223,6 +223,14 @@
   .change-up { color: var(--red); }
   .change-down { color: var(--green); }
 
+  .metric-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    line-height: 1.5;
+    opacity: 0.6;
+  }
+
   /* Chart styles */
   .chart-container {
     width: 100%;
@@ -456,6 +464,7 @@
       <div class="metric-detail">
         <span class="metric-change" id="mHYchg">20日変化: —</span>
       </div>
+      <div class="metric-desc">HY債全体のスプレッド。<br/>5%超で注意、7%超で警戒。</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">CCC-BBスプレッド差</div>
@@ -463,6 +472,7 @@
       <div class="metric-detail">
         <span class="metric-change" id="mSpreadSigma">σ: —</span>
       </div>
+      <div class="metric-desc">低格付け債の選別売り度合い。<br/>1σ超で注意、2σ超で警戒。</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">CCC / BB 変化率比</div>
@@ -470,6 +480,7 @@
       <div class="metric-detail">
         <span id="mRatioLabel" style="color:var(--text-muted)">— 警戒: &gt;3.0x</span>
       </div>
+      <div class="metric-desc">CCC格の拡大速度がBB格の何倍か。<br/>3倍超はパニックの兆候。</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">米国-新興国 相関（30日）</div>
@@ -477,6 +488,7 @@
       <div class="metric-detail">
         <span id="mCorrLabel" style="color:var(--text-muted)">— 警戒: &gt;0.8</span>
       </div>
+      <div class="metric-desc">米国・新興国HYの連動性。<br/>0.8超かつ両方拡大時はシステミックリスク。</div>
     </div>
   </div>
 
