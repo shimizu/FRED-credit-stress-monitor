@@ -20,6 +20,14 @@ FRED APIを使った信用市場ストレスモニターダッシュボード。
 | 20日変化幅 | > 50bps | > 100bps |
 | US-EM相関 | > 0.6 | > 0.8 かつ両方拡大 |
 
+## データ取得の仕組み
+
+GitHub Actionsが毎日UTC 22:00（米国市場クローズ後）にFRED APIからデータを取得し、`public/data/fred.json`に保存します。フロントエンドはこの静的JSONを読み込んで描画します。
+
+- ワークフロー: `.github/workflows/fetch-fred.yml`
+- 手動実行: GitHub Actions画面から`workflow_dispatch`で即時実行可能
+- リポジトリのSecrets設定に`FRED_API_KEY`（[FRED API](https://fred.stlouisfed.org/docs/api/api_key.html)で取得）が必要
+
 ## セットアップ
 
 ### 1. 依存パッケージのインストール
@@ -28,27 +36,13 @@ FRED APIを使った信用市場ストレスモニターダッシュボード。
 npm install
 ```
 
-### 2. FRED APIキーの設定
-
-[FRED API](https://fred.stlouisfed.org/docs/api/api_key.html)からAPIキーを取得し、`.env`ファイルを作成してください。
-
-```bash
-cp .env.example .env
-```
-
-`.env`ファイルを編集してAPIキーを設定します。
-
-```
-VITE_FRED_API_KEY=your_fred_api_key_here
-```
-
-### 3. 開発サーバーの起動
+### 2. 開発サーバーの起動
 
 ```bash
 npm run dev
 ```
 
-ページ読み込み時にFRED APIから自動的にデータを取得し、ダッシュボードを描画します。
+`public/data/fred.json`が存在すればダッシュボードが描画されます。初回はGitHub Actionsのワークフローを手動実行してデータを生成してください。
 
 ## コマンド
 
@@ -79,11 +73,13 @@ npm run dev
 
 ```
 fred_dashboard/
+├── .github/workflows/
+│   └── fetch-fred.yml  # 日次データ取得 + ビルド + デプロイ
+├── public/data/
+│   └── fred.json       # FREDデータ（GitHub Actionsで自動更新）
 ├── src/
-│   ├── index.html   # HTML構造 + インラインCSS
-│   └── index.js     # データ取得・計算・D3チャート描画・アラート判定
-├── .env             # FRED APIキー（git管理外）
-├── .env.example     # .envのテンプレート
-├── vite.config.js   # Vite設定
+│   ├── index.html      # HTML構造 + インラインCSS
+│   └── index.js        # 計算・D3チャート描画・アラート判定
+├── vite.config.js      # Vite設定
 └── package.json
 ```
