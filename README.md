@@ -3,6 +3,8 @@
 FRED APIを使った信用市場ストレスモニターダッシュボード。
 米国ハイイールド債のOAS（Option-Adjusted Spread）を格付け別に可視化し、信用ストレスのシグナルを自動判定する単一ページアプリケーション。
 
+https://shimizu.github.io/FRED-credit-stress-monitor/
+
 ## 機能
 
 - 格付け別OASスプレッド推移チャート（HY Total / BB / Single-B / CCC）
