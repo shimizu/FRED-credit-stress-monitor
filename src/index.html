@@ -542,6 +542,17 @@
 </header>
 
 <main class="container">
+  <!-- Alert log -->
+  <div class="card card-full">
+    <div class="card-title">アラートログ</div>
+    <div class="alert-log" id="alertLog" role="log" aria-label="アラートログ">
+      <div class="alert-item">
+        <span class="alert-level alert-ok">待機中</span>
+        <span class="alert-msg">データを取得してください</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Metrics -->
   <div class="metrics-row" id="metricsRow">
     <div class="metric-card" title="HY債全体のスプレッド。5%超で注意、7%超で警戒。">
@@ -661,16 +672,6 @@
     <div class="chart-desc">TED Spread・CP Spread・SOFR・St.Louis FSIのZスコア平均。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
   </div>
 
-  <!-- Alert log -->
-  <div class="card">
-    <div class="card-title">アラートログ</div>
-    <div class="alert-log" id="alertLog" role="log" aria-label="アラートログ">
-      <div class="alert-item">
-        <span class="alert-level alert-ok">待機中</span>
-        <span class="alert-msg">データを取得してください</span>
-      </div>
-    </div>
-  </div>
 </main>
 
 <script type="module" src="index.js"></script>
