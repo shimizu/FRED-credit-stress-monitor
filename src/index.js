@@ -195,16 +195,22 @@ function addThresholdLine(g, yScale, innerW, value, label, color) {
 }
 
 function addHoverOverlay(g, containerId, tooltipId, xScale, innerW, innerH, datasets, formatFn) {
+  const container = document.getElementById(containerId);
   const tooltip = document.getElementById(tooltipId);
+  if (!container || !tooltip) return;
+
   const overlay = g.append('rect')
     .attr('width', innerW).attr('height', innerH)
-    .attr('fill', 'transparent')
+    .attr('fill', 'none')
+    .attr('pointer-events', 'all')
     .style('cursor', 'crosshair');
+  overlay.raise();
 
   const vLine = g.append('line')
     .attr('y1', 0).attr('y2', innerH)
     .attr('stroke', 'rgba(255,255,255,0.15)')
     .attr('stroke-width', 1)
+    .style('pointer-events', 'none')
     .style('display', 'none');
 
   overlay.on('mousemove', function (event) {
@@ -218,12 +224,17 @@ function addHoverOverlay(g, containerId, tooltipId, xScale, innerW, innerH, data
     tooltip.innerHTML = html;
     tooltip.style.display = 'block';
 
-    const container = document.getElementById(containerId);
+    const leftPadding = 12;
+    const rightPadding = 12;
+    const tooltipWidth = tooltip.offsetWidth || 180;
     const rect = container.getBoundingClientRect();
-    let left = mx + 70;
-    if (left + 180 > rect.width) left = mx - 140;
-    tooltip.style.left = left + 'px';
-    tooltip.style.top = '20px';
+    let left = mx + 16;
+    const maxLeft = rect.width - tooltipWidth - rightPadding;
+    if (left > maxLeft) left = mx - tooltipWidth - 16;
+    left = Math.max(leftPadding, left);
+
+    tooltip.style.left = `${container.offsetLeft + left}px`;
+    tooltip.style.top = `${container.offsetTop + 12}px`;
   });
 
   overlay.on('mouseleave', () => {
