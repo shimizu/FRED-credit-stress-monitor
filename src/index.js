@@ -164,11 +164,11 @@ function createSVG(containerId, margin = { top: 10, right: 50, bottom: 30, left:
   return { svg, g, innerW, innerH, width, height, margin };
 }
 
-function addAxes(g, xScale, yScale, innerW, innerH, yFormat = '.1f') {
+function addAxes(g, xScale, yScale, innerW, innerH, yFormat = '.1f', xTicks = 6) {
   g.append('g')
     .attr('class', 'axis')
     .attr('transform', `translate(0,${innerH})`)
-    .call(d3.axisBottom(xScale).ticks(6).tickFormat(d3.timeFormat('%Y/%m')));
+    .call(d3.axisBottom(xScale).ticks(xTicks).tickFormat(d3.timeFormat('%Y/%m')));
 
   g.append('g')
     .attr('class', 'axis')
@@ -571,7 +571,7 @@ function renderBankStress() {
   const yMax = Math.max(d3.max(scoreData, d => d.value), 70);
   const y = d3.scaleLinear().domain([yMin, yMax * 1.05]).range([innerH, 0]);
 
-  addAxes(g, x, y, innerW, innerH, '.0f');
+  addAxes(g, x, y, innerW, innerH, '.0f', 3);
   addThresholdLine(g, y, innerW, 45, '注意', 'var(--yellow)');
   addThresholdLine(g, y, innerW, 55, '警戒', 'var(--yellow)');
   addThresholdLine(g, y, innerW, 65, '危機', 'var(--red)');
