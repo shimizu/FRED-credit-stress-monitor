@@ -5,110 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>信用ストレスモニター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* ═══════════════════════════════════════════
+     DESIGN TOKENS
+     ═══════════════════════════════════════════ */
   :root {
-    --bg-primary: #0a0e17;
-    --bg-card: #111827;
-    --bg-card-hover: #1a2332;
-    --border: #1e2d3d;
-    --text-primary: #e2e8f0;
-    --text-secondary: #e2e8f0;
-    --text-muted: #e2e8f0;
-    --green: #22c55e;
-    --green-dim: #16a34a;
-    --yellow: #eab308;
-    --yellow-dim: #ca8a04;
-    --red: #ef4444;
-    --red-dim: #dc2626;
-    --blue: #3b82f6;
-    --cyan: #06b6d4;
-    --purple: #a78bfa;
-    --orange: #f97316;
+    /* Backgrounds */
+    --bg-primary: #0b0f19;
+    --bg-card: #131a2b;
+    --border: #1f2e40;
+    --border-hover: #2a3d54;
+
+    /* Text hierarchy */
+    --text-primary: #e1e7ef;
+    --text-secondary: #8d9bb2;
+    --text-muted: #5a6a80;
+
+    /* Semantic colors */
+    --green: #34d27b;
+    --yellow: #e5a816;
+    --red: #e54d4d;
+
+    /* Data visualization */
+    --cyan: #2eb8d4;
+    --blue: #4b8ef5;
+    --purple: #9b85f0;
+    --orange: #e8853a;
+
+    /* Spacing scale */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+
+    /* Typography */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --text-xs: 10px;
+    --text-sm: 11px;
+    --text-base: 13px;
+    --text-lg: 16px;
+    --text-xl: 24px;
+    --text-2xl: 28px;
+
+    /* Radius */
+    --radius-sm: 3px;
+    --radius-md: 6px;
   }
 
+  /* ═══════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════ */
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
     min-height: 100vh;
     overflow-x: hidden;
   }
 
-  .scanline {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 0, 0, 0.03) 2px,
-      rgba(0, 0, 0, 0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 1000;
-  }
-
+  /* ═══════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════ */
   header {
-    padding: 20px 32px;
+    padding: var(--space-md) var(--space-xl);
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(10,14,23,0.98));
+    background: var(--bg-card);
   }
 
-  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header-left { display: flex; align-items: center; gap: var(--space-md); }
 
   .logo {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 700;
-    font-size: 18px;
-    letter-spacing: 2px;
-    color: var(--cyan);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    letter-spacing: 1.5px;
+    color: var(--text-primary);
     text-transform: uppercase;
   }
 
   .logo-sub {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     color: var(--text-muted);
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
   }
 
   .header-right {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: var(--space-lg);
   }
 
   .status-time {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     color: var(--text-secondary);
   }
 
+  /* ═══════════════════════════════════════════
+     SIGNAL BADGES
+     ═══════════════════════════════════════════ */
   .overall-signal {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 16px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
+    gap: var(--space-sm);
+    padding: 6px var(--space-md);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
     font-weight: 600;
     letter-spacing: 1px;
   }
 
-  .signal-green { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
-  .signal-yellow { background: rgba(234,179,8,0.12); color: var(--yellow); border: 1px solid rgba(234,179,8,0.25); }
-  .signal-red { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); animation: pulse-red 2s infinite; }
+  .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
+  .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
+  .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
 
   @keyframes pulse-red {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
-    50% { box-shadow: 0 0 12px 2px rgba(239,68,68,0.15); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229,77,77,0.25); }
+    50% { box-shadow: 0 0 10px 2px rgba(229,77,77,0.12); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .signal-red { animation: none; }
   }
 
   .signal-dot {
@@ -118,103 +145,103 @@
     display: inline-block;
   }
 
-  .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
-  .dot-red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .dot-green { background: var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red { background: var(--red); }
 
+  /* ═══════════════════════════════════════════
+     LAYOUT
+     ═══════════════════════════════════════════ */
   .container {
-    padding: 24px 32px;
+    padding: var(--space-lg) var(--space-xl);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto;
-    gap: 20px;
+    gap: var(--space-md);
     max-width: 1600px;
     margin: 0 auto;
   }
 
+  /* ═══════════════════════════════════════════
+     CARDS
+     ═══════════════════════════════════════════ */
   .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: var(--radius-md);
+    padding: var(--space-lg);
     position: relative;
     overflow: hidden;
-    transition: border-color 0.3s;
+    transition: border-color 0.2s;
   }
 
-  .card:hover { border-color: #2a3a4d; }
-
-  .card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(6,182,212,0.3), transparent);
-  }
+  .card:hover { border-color: var(--border-hover); }
 
   .card-full { grid-column: 1 / -1; }
 
   .card-title {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     font-weight: 500;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 16px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 
   .card-signal {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 3px;
+    font-size: var(--text-xs);
+    padding: 2px var(--space-sm);
+    border-radius: var(--radius-sm);
     letter-spacing: 1px;
   }
 
-  /* Metric cards */
+  /* ═══════════════════════════════════════════
+     METRIC CARDS
+     ═══════════════════════════════════════════ */
   .metrics-row {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-md);
   }
 
   .metric-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    padding: var(--space-md) 20px;
     position: relative;
   }
 
   .metric-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     color: var(--text-muted);
-    letter-spacing: 1.5px;
+    letter-spacing: 1px;
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-sm);
   }
 
   .metric-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 28px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-xs);
+    line-height: 1.2;
   }
 
   .metric-detail {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     color: var(--text-secondary);
   }
 
   .metric-change {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -223,15 +250,9 @@
   .change-up { color: var(--red); }
   .change-down { color: var(--green); }
 
-  .metric-desc {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-top: 8px;
-    line-height: 1.5;
-    opacity: 0.6;
-  }
-
-  /* Chart styles */
+  /* ═══════════════════════════════════════════
+     CHARTS
+     ═══════════════════════════════════════════ */
   .chart-container {
     width: 100%;
     height: 260px;
@@ -243,12 +264,12 @@
   }
 
   svg text {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
   }
 
   .axis text {
     fill: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
 
   .axis line, .axis path {
@@ -256,20 +277,31 @@
   }
 
   .grid line {
-    stroke: rgba(30, 45, 61, 0.5);
+    stroke: rgba(31, 46, 64, 0.4);
     stroke-dasharray: 2, 3;
   }
 
   .grid path { stroke: none; }
 
+  .chart-desc {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: var(--space-sm);
+    line-height: 1.6;
+    font-family: var(--font-sans);
+  }
+
+  /* ═══════════════════════════════════════════
+     TOOLTIPS
+     ═══════════════════════════════════════════ */
   .tooltip {
     position: absolute;
-    background: rgba(17, 24, 39, 0.95);
+    background: rgba(19, 26, 43, 0.96);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) 14px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     color: var(--text-primary);
     pointer-events: none;
     z-index: 100;
@@ -279,20 +311,22 @@
 
   .tooltip-date {
     color: var(--text-muted);
-    margin-bottom: 4px;
-    font-size: 10px;
+    margin-bottom: var(--space-xs);
+    font-size: var(--text-xs);
   }
 
   .tooltip-row {
     display: flex;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--space-md);
     line-height: 1.6;
   }
 
   .tooltip-label { color: var(--text-secondary); }
 
-  /* Threshold lines */
+  /* ═══════════════════════════════════════════
+     THRESHOLD LINES
+     ═══════════════════════════════════════════ */
   .threshold-line {
     stroke-dasharray: 6, 4;
     stroke-width: 1;
@@ -304,7 +338,9 @@
     letter-spacing: 1px;
   }
 
-  /* Legend */
+  /* ═══════════════════════════════════════════
+     LEGEND
+     ═══════════════════════════════════════════ */
   .legend {
     display: flex;
     gap: 20px;
@@ -316,14 +352,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     color: var(--text-secondary);
-    cursor: pointer;
-    transition: opacity 0.2s;
   }
-
-  .legend-item:hover { opacity: 0.7; }
 
   .legend-color {
     width: 12px;
@@ -331,59 +363,45 @@
     border-radius: 1px;
   }
 
-  /* Loading */
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 200px;
-    color: var(--text-muted);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    letter-spacing: 1px;
-  }
-
-  .loading-spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--cyan);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 10px;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
+  /* ═══════════════════════════════════════════
+     PERIOD SELECTOR
+     ═══════════════════════════════════════════ */
   .period-selector {
     display: flex;
-    gap: 4px;
+    gap: var(--space-xs);
   }
 
   .period-btn {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text-muted);
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.2s, color 0.2s;
   }
 
   .period-btn.active {
-    background: rgba(6,182,212,0.15);
-    border-color: rgba(6,182,212,0.3);
+    background: rgba(46,184,212,0.12);
+    border-color: rgba(46,184,212,0.28);
     color: var(--cyan);
   }
 
-  .period-btn:hover {
+  .period-btn:hover:not(.active) {
     border-color: var(--text-muted);
     color: var(--text-secondary);
   }
 
-  /* Alert log */
+  .period-btn:focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 1px;
+  }
+
+  /* ═══════════════════════════════════════════
+     ALERT LOG
+     ═══════════════════════════════════════════ */
   .alert-log {
     max-height: 180px;
     overflow-y: auto;
@@ -394,11 +412,11 @@
   .alert-item {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(30,45,61,0.3);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid rgba(31,46,64,0.25);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     line-height: 1.5;
   }
 
@@ -414,47 +432,41 @@
     margin-top: 1px;
   }
 
-  .alert-warn { background: rgba(234,179,8,0.15); color: var(--yellow); }
-  .alert-danger { background: rgba(239,68,68,0.15); color: var(--red); }
-  .alert-ok { background: rgba(34,197,94,0.1); color: var(--green); }
+  .alert-warn { background: rgba(229,168,22,0.12); color: var(--yellow); }
+  .alert-danger { background: rgba(229,77,77,0.12); color: var(--red); }
+  .alert-ok { background: rgba(52,210,123,0.08); color: var(--green); }
 
   .alert-msg { color: var(--text-primary); }
 
-  .chart-desc {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 10px;
-    line-height: 1.5;
-    font-family: 'IBM Plex Sans', sans-serif;
-  }
-
-  /* Bank Stress */
+  /* ═══════════════════════════════════════════
+     BANK STRESS
+     ═══════════════════════════════════════════ */
   .bank-stress-header {
     display: flex;
     align-items: flex-start;
-    gap: 32px;
-    margin-bottom: 16px;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-md);
   }
 
   .bank-score-display {
-    min-width: 160px;
+    min-width: 80px;
   }
 
   .bank-components {
     display: flex;
-    gap: 24px;
+    gap: var(--space-md);
     flex-wrap: wrap;
-    padding-top: 4px;
+    padding-top: var(--space-xs);
   }
 
   .bank-component {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-xs);
   }
 
   .bank-comp-label {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
     color: var(--text-muted);
     letter-spacing: 1px;
@@ -462,20 +474,55 @@
   }
 
   .bank-comp-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 16px;
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
     font-weight: 600;
   }
 
-  /* Responsive */
+  /* ═══════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════ */
   @media (max-width: 1200px) {
     .metrics-row { grid-template-columns: repeat(2, 1fr); }
-    .container { grid-template-columns: 1fr; padding: 16px; }
+    .container { grid-template-columns: 1fr; padding: var(--space-md); }
+  }
+
+  @media (max-width: 768px) {
+    header {
+      flex-direction: column;
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      align-items: flex-start;
+    }
+    .header-right {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+    .metrics-row { grid-template-columns: 1fr; }
+    .container { padding: var(--space-sm); gap: var(--space-sm); }
+    .card { padding: var(--space-md); }
+    .metric-value { font-size: 22px; }
+    .chart-container { height: 200px; }
+    .chart-container-tall { height: 240px; }
+    .bank-stress-header {
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .bank-components { gap: var(--space-md); }
+    .period-selector { flex-wrap: wrap; }
+  }
+
+  /* ═══════════════════════════════════════════
+     FOCUS & ACCESSIBILITY
+     ═══════════════════════════════════════════ */
+  :focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
   }
 </style>
 </head>
 <body>
-<div class="scanline"></div>
 
 <header>
   <div class="header-left">
@@ -486,48 +533,51 @@
   </div>
   <div class="header-right">
     <span class="status-time" id="lastUpdate"></span>
-    <div class="status-time" id="clock"></div>
-    <div class="overall-signal signal-green" id="overallSignal">
-      <span class="signal-dot dot-green" id="overallDot"></span>
+    <time class="status-time" id="clock"></time>
+    <div class="overall-signal signal-green" id="overallSignal" role="status" aria-live="polite">
+      <span class="signal-dot dot-green" id="overallDot" aria-hidden="true"></span>
       <span id="overallLabel">LOADING</span>
     </div>
   </div>
 </header>
 
-<div class="container">
+<main class="container">
   <!-- Metrics -->
   <div class="metrics-row" id="metricsRow">
-    <div class="metric-card">
+    <div class="metric-card" title="HY債全体のスプレッド。5%超で注意、7%超で警戒。">
       <div class="metric-label">米国HY OAS</div>
       <div class="metric-value" id="mHY" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
         <span class="metric-change" id="mHYchg">20日変化: —</span>
       </div>
-      <div class="metric-desc">HY債全体のスプレッド。<br/>5%超で注意、7%超で警戒。</div>
     </div>
-    <div class="metric-card">
+    <div class="metric-card" title="低格付け債の選別売り度合い。1σ超で注意、2σ超で警戒。">
       <div class="metric-label">CCC-BBスプレッド差</div>
       <div class="metric-value" id="mSpread" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
         <span class="metric-change" id="mSpreadSigma">σ: —</span>
       </div>
-      <div class="metric-desc">低格付け債の選別売り度合い。<br/>1σ超で注意、2σ超で警戒。</div>
     </div>
-    <div class="metric-card">
+    <div class="metric-card" title="CCC格の拡大速度がBB格の何倍か。3倍超はパニックの兆候。">
       <div class="metric-label">CCC / BB 変化率比</div>
       <div class="metric-value" id="mRatio" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
         <span id="mRatioLabel" style="color:var(--text-muted)">— 警戒: &gt;3.0x</span>
       </div>
-      <div class="metric-desc">CCC格の拡大速度がBB格の何倍か。<br/>3倍超はパニックの兆候。</div>
     </div>
-    <div class="metric-card">
+    <div class="metric-card" title="米国・新興国HYの連動性。0.8超かつ両方拡大時はシステミックリスク。">
       <div class="metric-label">米国-新興国 相関（30日）</div>
       <div class="metric-value" id="mCorr" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
         <span id="mCorrLabel" style="color:var(--text-muted)">— 警戒: &gt;0.8</span>
       </div>
-      <div class="metric-desc">米国・新興国HYの連動性。<br/>0.8超かつ両方拡大時はシステミックリスク。</div>
+    </div>
+    <div class="metric-card" title="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。">
+      <div class="metric-label">銀行ストレス Score</div>
+      <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
+      <div class="metric-detail">
+        <span class="metric-change" id="mBankLevel">—</span>
+      </div>
     </div>
   </div>
 
@@ -535,15 +585,15 @@
   <div class="card card-full">
     <div class="card-title">
       <span>格付け別OASスプレッド推移</span>
-      <div class="period-selector">
-        <button class="period-btn" onclick="setPeriod('1y')">1年</button>
-        <button class="period-btn active" onclick="setPeriod('3y')">3年</button>
-        <button class="period-btn" onclick="setPeriod('5y')">5年</button>
-        <button class="period-btn" onclick="setPeriod('all')">全期間</button>
+      <div class="period-selector" role="group" aria-label="表示期間">
+        <button class="period-btn" onclick="setPeriod('1y', event)" aria-pressed="false">1年</button>
+        <button class="period-btn active" onclick="setPeriod('3y', event)" aria-pressed="true">3年</button>
+        <button class="period-btn" onclick="setPeriod('5y', event)" aria-pressed="false">5年</button>
+        <button class="period-btn" onclick="setPeriod('all', event)" aria-pressed="false">全期間</button>
       </div>
     </div>
     <div class="legend" id="legendMain"></div>
-    <div class="chart-container chart-container-tall" id="chartOAS"></div>
+    <div class="chart-container chart-container-tall" id="chartOAS" role="img" aria-label="ICE BofA指数に基づく格付け別OASの推移。5%超で警戒、7%超で信用収縮ゾーン。"></div>
     <div class="tooltip" id="tooltipOAS"></div>
     <div class="chart-desc">ICE BofA指数に基づく格付け別OASの推移。5%超で警戒、7%超で信用収縮ゾーン。</div>
   </div>
@@ -554,7 +604,7 @@
       <span>CCC − BB スプレッド差</span>
       <span class="card-signal" id="spreadSignal"></span>
     </div>
-    <div class="chart-container" id="chartSpread"></div>
+    <div class="chart-container" id="chartSpread" role="img" aria-label="CCC-BBスプレッド差。μ+2σ超で警戒。"></div>
     <div class="tooltip" id="tooltipSpread"></div>
     <div class="chart-desc">CCC格とBB格のスプレッド差。拡大は低格付け債への選別売り（質への逃避）を示唆。μ+2σ超で警戒。</div>
   </div>
@@ -565,7 +615,7 @@
       <span>20日変化幅（bps）</span>
       <span class="card-signal" id="velocitySignal"></span>
     </div>
-    <div class="chart-container" id="chartVelocity"></div>
+    <div class="chart-container" id="chartVelocity" role="img" aria-label="直近20営業日のスプレッド変化幅。+100bps超で警戒。"></div>
     <div class="tooltip" id="tooltipVelocity"></div>
     <div class="chart-desc">直近20営業日のスプレッド変化幅（bps）。+100bps超の急拡大は市場ストレスの兆候。</div>
   </div>
@@ -577,45 +627,36 @@
       <span class="card-signal" id="emSignal"></span>
     </div>
     <div class="legend" id="legendEM"></div>
-    <div class="chart-container" id="chartEM"></div>
+    <div class="chart-container" id="chartEM" role="img" aria-label="米国と新興国のHYスプレッド比較。相関0.8超かつ両方拡大時はシステミックリスク。"></div>
     <div class="tooltip" id="tooltipEM"></div>
     <div class="chart-desc">米国と新興国のHYスプレッドを比較。30日相関が0.8超かつ両方拡大時はシステミックリスクを示唆。</div>
   </div>
 
-  <!-- Bank Stress Index -->
-  <div class="card card-full">
+  <!-- Bank Stress Index: Chart -->
+  <div class="card">
     <div class="card-title">
       <span>銀行ストレス指数</span>
       <span class="card-signal" id="bankSignal"></span>
     </div>
-    <div class="bank-stress-header">
-      <div class="bank-score-display">
-        <div class="metric-label">Bank Stress Score</div>
-        <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
-        <div class="metric-detail">
-          <span class="metric-change" id="mBankLevel">—</span>
-        </div>
+    <div class="bank-components" style="margin-bottom: var(--space-md);">
+      <div class="bank-component">
+        <span class="bank-comp-label">TED</span>
+        <span class="bank-comp-value" id="bcTED">—</span>
       </div>
-      <div class="bank-components">
-        <div class="bank-component">
-          <span class="bank-comp-label">TED Spread</span>
-          <span class="bank-comp-value" id="bcTED">—</span>
-        </div>
-        <div class="bank-component">
-          <span class="bank-comp-label">CP Spread</span>
-          <span class="bank-comp-value" id="bcCP">—</span>
-        </div>
-        <div class="bank-component">
-          <span class="bank-comp-label">SOFR</span>
-          <span class="bank-comp-value" id="bcSOFR">—</span>
-        </div>
-        <div class="bank-component">
-          <span class="bank-comp-label">StL FSI</span>
-          <span class="bank-comp-value" id="bcSTLFSI">—</span>
-        </div>
+      <div class="bank-component">
+        <span class="bank-comp-label">CP</span>
+        <span class="bank-comp-value" id="bcCP">—</span>
+      </div>
+      <div class="bank-component">
+        <span class="bank-comp-label">SOFR</span>
+        <span class="bank-comp-value" id="bcSOFR">—</span>
+      </div>
+      <div class="bank-component">
+        <span class="bank-comp-label">FSI</span>
+        <span class="bank-comp-value" id="bcSTLFSI">—</span>
       </div>
     </div>
-    <div class="chart-container chart-container-tall" id="chartBank"></div>
+    <div class="chart-container" id="chartBank" role="img" aria-label="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。"></div>
     <div class="tooltip" id="tooltipBank"></div>
     <div class="chart-desc">TED Spread・CP Spread・SOFR・St.Louis FSIのZスコア平均。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
   </div>
@@ -623,14 +664,14 @@
   <!-- Alert log -->
   <div class="card">
     <div class="card-title">アラートログ</div>
-    <div class="alert-log" id="alertLog">
+    <div class="alert-log" id="alertLog" role="log" aria-label="アラートログ">
       <div class="alert-item">
         <span class="alert-level alert-ok">待機中</span>
         <span class="alert-msg">データを取得してください</span>
       </div>
     </div>
   </div>
-</div>
+</main>
 
 <script type="module" src="index.js"></script>
 </body>
