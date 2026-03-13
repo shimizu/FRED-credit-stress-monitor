@@ -1,5 +1,5 @@
 {
-  "name": "prejs-minimum-template",
+  "name": "fred-credit-stress-monitor",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -21,9 +21,6 @@
   },
   "homepage": "https://github.com/shimizu/prejs-minimum-template#readme",
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.0",
-    "@babel/preset-react": "^7.28.5",
     "@vitejs/plugin-legacy": "^8.0.0",
     "sass": "^1.98.0",
     "vite": "^8.0.0"

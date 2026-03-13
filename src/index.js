@@ -2,16 +2,16 @@
 // CONFIG
 // ═══════════════════════════════════════════
 const COLORS = {
-  HY:   '#06b6d4',
-  BB:   '#22c55e',
-  B:    '#eab308',
-  CCC:  '#ef4444',
-  EMHY: '#a78bfa',
-  TEDRATE: '#f97316',
-  CP:      '#3b82f6',
-  SOFR:    '#22c55e',
-  STLFSI:  '#a78bfa',
-  BANK:    '#f97316'
+  HY:   '#2eb8d4',
+  BB:   '#34d27b',
+  B:    '#e5a816',
+  CCC:  '#e54d4d',
+  EMHY: '#9b85f0',
+  TEDRATE: '#e8853a',
+  CP:      '#4b8ef5',
+  SOFR:    '#34d27b',
+  STLFSI:  '#9b85f0',
+  BANK:    '#e8853a'
 };
 
 const LABELS = {
@@ -57,16 +57,26 @@ async function startFetch() {
     renderAll();
   } catch (e) {
     console.error('データ読み込みエラー:', e.message);
+    const logEl = document.getElementById('alertLog');
+    logEl.innerHTML = `<div class="alert-item"><span class="alert-level alert-danger">エラー</span><span class="alert-msg">データの読み込みに失敗しました: ${e.message}</span></div>`;
+    document.getElementById('overallLabel').textContent = 'ERROR';
   }
 }
 
 // ═══════════════════════════════════════════
 // PERIOD FILTER
 // ═══════════════════════════════════════════
-function setPeriod(p) {
+function setPeriod(p, e) {
   currentPeriod = p;
-  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('.period-btn').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  const target = e ? e.currentTarget : document.querySelector('.period-btn.active');
+  if (target) {
+    target.classList.add('active');
+    target.setAttribute('aria-pressed', 'true');
+  }
   if (Object.keys(allData).length) renderAll();
 }
 
