@@ -38,7 +38,12 @@ jobs:
             BB:   'BAMLH0A1HYBB',
             B:    'BAMLH0A2HYB',
             CCC:  'BAMLH0A3HYC',
-            EMHY: 'BAMLEMHBHYCRPIOAS'
+            EMHY: 'BAMLEMHBHYCRPIOAS',
+            TEDRATE: 'TEDRATE',
+            CP3M:    'CP3M',
+            DTB3:    'DTB3',
+            SOFR:    'SOFR',
+            STLFSI:  'STLFSI4'
           };
 
           async function fetchSeries(seriesId) {

@@ -428,6 +428,45 @@
     font-family: 'IBM Plex Sans', sans-serif;
   }
 
+  /* Bank Stress */
+  .bank-stress-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 32px;
+    margin-bottom: 16px;
+  }
+
+  .bank-score-display {
+    min-width: 160px;
+  }
+
+  .bank-components {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+  }
+
+  .bank-component {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bank-comp-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .bank-comp-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
   /* Responsive */
   @media (max-width: 1200px) {
     .metrics-row { grid-template-columns: repeat(2, 1fr); }
@@ -541,6 +580,44 @@
     <div class="chart-container" id="chartEM"></div>
     <div class="tooltip" id="tooltipEM"></div>
     <div class="chart-desc">米国と新興国のHYスプレッドを比較。30日相関が0.8超かつ両方拡大時はシステミックリスクを示唆。</div>
+  </div>
+
+  <!-- Bank Stress Index -->
+  <div class="card card-full">
+    <div class="card-title">
+      <span>銀行ストレス指数</span>
+      <span class="card-signal" id="bankSignal"></span>
+    </div>
+    <div class="bank-stress-header">
+      <div class="bank-score-display">
+        <div class="metric-label">Bank Stress Score</div>
+        <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
+        <div class="metric-detail">
+          <span class="metric-change" id="mBankLevel">—</span>
+        </div>
+      </div>
+      <div class="bank-components">
+        <div class="bank-component">
+          <span class="bank-comp-label">TED Spread</span>
+          <span class="bank-comp-value" id="bcTED">—</span>
+        </div>
+        <div class="bank-component">
+          <span class="bank-comp-label">CP Spread</span>
+          <span class="bank-comp-value" id="bcCP">—</span>
+        </div>
+        <div class="bank-component">
+          <span class="bank-comp-label">SOFR</span>
+          <span class="bank-comp-value" id="bcSOFR">—</span>
+        </div>
+        <div class="bank-component">
+          <span class="bank-comp-label">StL FSI</span>
+          <span class="bank-comp-value" id="bcSTLFSI">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart-container chart-container-tall" id="chartBank"></div>
+    <div class="tooltip" id="tooltipBank"></div>
+    <div class="chart-desc">TED Spread・CP Spread・SOFR・St.Louis FSIのZスコア平均。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
   </div>
 
   <!-- Alert log -->
