@@ -95,6 +95,8 @@ function last(arr) { return arr[arr.length - 1]; }
 
 function change20d(data) {
   if (data.length < 21) return null;
+  // 直近値と20営業日前の差を%ptで求め、100倍してbpsに変換する。
+  // 例: 4.20% -> 4.80% は 0.60%pt = 60bps。
   return (last(data).value - data[data.length - 21].value) * 100; // bps
 }
 
@@ -103,6 +105,7 @@ function rollingChange(data, window = 20) {
   for (let i = window; i < data.length; i++) {
     result.push({
       date: data[i].date,
+      // 各日時点で「window日前から何bps動いたか」を系列化する。
       value: (data[i].value - data[i - window].value) * 100
     });
   }
@@ -113,6 +116,7 @@ function spreadDiff(ccc, bb) {
   const bbMap = new Map(bb.map(d => [formatDate(d.date), d.value]));
   return ccc
     .filter(d => bbMap.has(formatDate(d.date)))
+    // 同日のCCCとBBのOAS差。低格付けほど強く売られている局面で拡大しやすい。
     .map(d => ({ date: d.date, value: d.value - bbMap.get(formatDate(d.date)) }));
 }
 
@@ -125,6 +129,8 @@ function rollingCorrelation(a, b, window = 30) {
   const result = [];
   for (let i = window; i < aligned.length; i++) {
     const slice = aligned.slice(i - window, i);
+    // 30日窓の平均を引いて共分散・分散を作り、ピアソン相関係数を計算する。
+    // +1に近いほど同方向に強く連動、0付近は無相関、-1に近いほど逆相関。
     const ma = d3.mean(slice, d => d.va);
     const mb = d3.mean(slice, d => d.vb);
     let num = 0, da = 0, db = 0;
@@ -143,6 +149,8 @@ function sigma(data, lookbackDays = 252) {
   const mean = d3.mean(recent, d => d.value);
   const std = d3.deviation(recent, d => d.value);
   const current = last(data).value;
+  // 現在値が直近1年平均から何標準偏差ずれているかを測る。
+  // 指標ごとの絶対水準ではなく、「その系列としてどれだけ異常か」を比較するために使う。
   return std ? (current - mean) / std : 0;
 }
 
@@ -263,6 +271,8 @@ function renderMetrics() {
   // US HY OAS
   const hyVal = last(hy).value;
   const hyChg = change20d(hy);
+  // HY全体のOAS水準で市場全体の信用プレミアムをざっくり判定する。
+  // 5%超は警戒域、7%超は信用収縮がかなり進んだ局面として扱う。
   const hyColor = hyVal > 7 ? 'var(--red)' : hyVal > 5 ? 'var(--yellow)' : 'var(--cyan)';
   document.getElementById('mHY').textContent = hyVal.toFixed(2) + '%';
   document.getElementById('mHY').style.color = hyColor;
@@ -276,6 +286,8 @@ function renderMetrics() {
   const diff = spreadDiff(ccc, bb);
   const spreadVal = last(diff).value;
   const spreadSig = sigma(diff);
+  // CCC-BB差の拡大は「より弱い発行体だけが先に売られている」状態を示しやすい。
+  // 水準そのものよりも、直近1年分布からの乖離度(σ)で異常値判定する。
   const spreadColor = spreadSig > 2 ? 'var(--red)' : spreadSig > 1 ? 'var(--yellow)' : 'var(--green)';
   document.getElementById('mSpread').textContent = spreadVal.toFixed(2) + '%';
   document.getElementById('mSpread').style.color = spreadColor;
@@ -287,6 +299,8 @@ function renderMetrics() {
   const bbChg = change20d(bb);
   let ratio = '—', ratioColor = 'var(--text-muted)';
   if (cccChg !== null && bbChg !== null && bbChg !== 0) {
+    // 低格付けCCCの拡大スピードがBBの何倍かを見る。
+    // 絶対値で判定するのは、BBが縮小している局面でも「動きの非対称性」を拾いたいため。
     ratio = (cccChg / bbChg).toFixed(2) + 'x';
     const r = Math.abs(cccChg / bbChg);
     ratioColor = r > 3 ? 'var(--red)' : r > 2 ? 'var(--yellow)' : 'var(--green)';
@@ -298,6 +312,8 @@ function renderMetrics() {
   const corrData = rollingCorrelation(hy, emhy, 30);
   if (corrData.length) {
     const corrVal = last(corrData).value;
+    // 米国HYと新興国HYが同時に強く連動すると、ローカル要因ではなく
+    // グローバルなリスクオフで広がっている可能性が高い。
     const corrColor = corrVal > 0.8 ? 'var(--red)' : corrVal > 0.6 ? 'var(--yellow)' : 'var(--green)';
     document.getElementById('mCorr').textContent = corrVal.toFixed(3);
     document.getElementById('mCorr').style.color = corrColor;
@@ -359,6 +375,7 @@ function renderSpreadChart() {
   const mean = d3.mean(last252, d => d.value);
   const std = d3.deviation(last252, d => d.value);
   if (mean && std) {
+    // 直近1年の平均(μ)と+2σを引き、平常レンジからの上振れを可視化する。
     addThresholdLine(g, y, innerW, mean + 2 * std, '+2σ', 'var(--red)');
     addThresholdLine(g, y, innerW, mean, 'μ', 'var(--text-muted)');
   }
@@ -426,6 +443,7 @@ function renderVelocityChart() {
   // Signal
   const hyVel = last(datasets[0].data)?.value || 0;
   const velEl = document.getElementById('velocitySignal');
+  // HY OASの20日変化が+100bpsを超えると、短期間のストレス増幅として強い警戒を出す。
   if (hyVel > 100) { velEl.className = 'card-signal signal-red'; velEl.textContent = '警戒'; }
   else if (hyVel > 50) { velEl.className = 'card-signal signal-yellow'; velEl.textContent = '注意'; }
   else { velEl.className = 'card-signal signal-green'; velEl.textContent = '正常'; }
@@ -469,6 +487,8 @@ function renderEMChart() {
   const corrVal = corrData.length ? last(corrData).value : 0;
   const bothExpanding = change20d(allData.HY) > 0 && change20d(allData.EMHY) > 0;
   const emEl = document.getElementById('emSignal');
+  // 相関が高いだけでなく、両系列とも拡大していることを条件にして
+  // 「一緒に悪化している」局面だけを全面警戒にする。
   if (corrVal > 0.8 && bothExpanding) { emEl.className = 'card-signal signal-red'; emEl.textContent = '全面警戒'; }
   else if (corrVal > 0.6) { emEl.className = 'card-signal signal-yellow'; emEl.textContent = '注意'; }
   else { emEl.className = 'card-signal signal-green'; emEl.textContent = '正常'; }
@@ -488,6 +508,8 @@ function computeCPSpread(cp3m, dtb3) {
   const dtb3Map = new Map(dtb3.map(d => [formatDate(d.date), d.value]));
   return cp3m
     .filter(d => dtb3Map.has(formatDate(d.date)))
+    // CP金利から3カ月T-Billを引いた短期資金調達プレミアム。
+    // 銀行・企業の短期資金市場が詰まり始めると上がりやすい。
     .map(d => ({ date: d.date, value: d.value - dtb3Map.get(formatDate(d.date)) }));
 }
 
@@ -496,6 +518,7 @@ function zscoreArray(data) {
   const mean = d3.mean(vals);
   const std = d3.deviation(vals);
   if (!std) return data.map(d => ({ date: d.date, value: 0 }));
+  // 単位が異なる系列を平均合成するため、各系列を平均0・標準偏差1に標準化する。
   return data.map(d => ({ date: d.date, value: (d.value - mean) / std }));
 }
 
@@ -509,6 +532,8 @@ function computeBankStressIndex() {
   const zCP = zscoreArray(cp);
   const zSOFR = zscoreArray(sofr);
   const zSTLFSI = zscoreArray(stlfsi);
+  // TED、CPスプレッド、SOFR、水準化済みFSIを同じ土俵に乗せる。
+  // それぞれ短期金融市場、資金調達環境、政策金利近辺の逼迫、金融環境全体の歪みを代表する。
 
   const maps = [
     new Map(zTED.map(d => [formatDate(d.date), d.value])),
@@ -528,6 +553,7 @@ function computeBankStressIndex() {
   for (const dateStr of allDates) {
     const vals = maps.map(m => m.get(dateStr)).filter(v => v !== undefined);
     if (vals.length >= 2) {
+      // 欠損があっても2系列以上あれば平均を計算し、利用可能な情報だけで指数を継続させる。
       const bsi = d3.mean(vals);
       result.push({ date: parseDate(dateStr), value: bsi });
     }
@@ -547,6 +573,8 @@ function renderBankStress() {
   if (!bsi.length) return;
 
   const currentBSI = last(bsi).value;
+  // 標準化平均の0を50点に置き、1σを10点としてスコア化する。
+  // 直感的に読めるようにするための表示用変換で、相対比較の順位はBSI本体と同じ。
   const score = 50 + 10 * currentBSI;
   const level = bankScoreLevel(score);
 
@@ -632,9 +660,11 @@ function renderAlerts() {
   else if (hyVal > 5) alerts.push({ level: 'warn', msg: `US HY OAS ${hyVal.toFixed(2)}% — 500bps超、警戒ゾーン` });
   else alerts.push({ level: 'ok', msg: `US HY OAS ${hyVal.toFixed(2)}% — 平常レンジ` });
 
+  // 水準だけでなくスピードも見る。短期急拡大はイベントドリブンな悪化を示しやすい。
   if (hyChg !== null && hyChg > 100) alerts.push({ level: 'danger', msg: `20日変化 +${hyChg.toFixed(0)}bps — 急速な拡大` });
   else if (hyChg !== null && hyChg > 50) alerts.push({ level: 'warn', msg: `20日変化 +${hyChg.toFixed(0)}bps — 拡大傾向` });
 
+  // CCC-BB差のσ判定で、信用市場の中で弱い銘柄だけが先に崩れる兆候を拾う。
   if (spreadSig > 2) alerts.push({ level: 'danger', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 質への逃避が加速` });
   else if (spreadSig > 1) alerts.push({ level: 'warn', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 信用差別化の兆候` });
 
@@ -686,6 +716,8 @@ function updateOverallSignal() {
     if (bsi.length) bankScore = 50 + 10 * last(bsi).value;
   }
 
+  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差、銀行ストレスの
+  // どれかが閾値を超えたら段階的に色を引き上げる設計にしている。
   if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1 || bankScore >= 45) { level = 'yellow'; label = '注意'; }
   if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2 || bankScore >= 65) { level = 'red'; label = '警戒'; }
 
