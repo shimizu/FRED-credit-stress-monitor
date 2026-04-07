@@ -30,6 +30,7 @@ let allData = {};
 let currentPeriod = '3y';
 const parseDate = d3.timeParse('%Y-%m-%d');
 const formatDate = d3.timeFormat('%Y-%m-%d');
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ═══════════════════════════════════════════
 // CLOCK
@@ -142,6 +143,22 @@ function rollingCorrelation(a, b, window = 30) {
     result.push({ date: aligned[i].date, value: corr });
   }
   return result;
+}
+
+function rollingChangeCorrelation(a, b, changeWindow = 20, corrWindow = 30) {
+  // 水準同士ではなく、一定期間の変化幅同士の連動をみる。
+  return rollingCorrelation(rollingChange(a, changeWindow), rollingChange(b, changeWindow), corrWindow);
+}
+
+function latestWithin(series, targetDate, maxAgeDays) {
+  let candidate = null;
+  for (const point of series) {
+    if (point.date > targetDate) break;
+    candidate = point;
+  }
+  if (!candidate) return null;
+  const ageDays = (targetDate - candidate.date) / MS_PER_DAY;
+  return ageDays <= maxAgeDays ? candidate : null;
 }
 
 function sigma(data, lookbackDays = 252) {
@@ -309,7 +326,7 @@ function renderMetrics() {
   document.getElementById('mRatio').style.color = ratioColor;
 
   // US-EM correlation
-  const corrData = rollingCorrelation(hy, emhy, 30);
+  const corrData = rollingChangeCorrelation(hy, emhy, 20, 30);
   if (corrData.length) {
     const corrVal = last(corrData).value;
     // 米国HYと新興国HYが同時に強く連動すると、ローカル要因ではなく
@@ -483,7 +500,7 @@ function renderEMChart() {
   });
 
   // Signal
-  const corrData = rollingCorrelation(allData.HY, allData.EMHY, 30);
+  const corrData = rollingChangeCorrelation(allData.HY, allData.EMHY, 20, 30);
   const corrVal = corrData.length ? last(corrData).value : 0;
   const bothExpanding = change20d(allData.HY) > 0 && change20d(allData.EMHY) > 0;
   const emEl = document.getElementById('emSignal');
@@ -514,12 +531,18 @@ function computeCPSpread(cp3m, dtb3) {
 }
 
 function zscoreArray(data) {
-  const vals = data.map(d => d.value);
-  const mean = d3.mean(vals);
-  const std = d3.deviation(vals);
-  if (!std) return data.map(d => ({ date: d.date, value: 0 }));
-  // 単位が異なる系列を平均合成するため、各系列を平均0・標準偏差1に標準化する。
-  return data.map(d => ({ date: d.date, value: (d.value - mean) / std }));
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    const history = data.slice(0, i + 1);
+    const mean = d3.mean(history, d => d.value);
+    const std = d3.deviation(history, d => d.value);
+    // 将来データを使わず、その時点までの履歴だけで標準化する。
+    result.push({
+      date: data[i].date,
+      value: std ? (data[i].value - mean) / std : 0
+    });
+  }
+  return result;
 }
 
 function computeBankStressIndex() {
@@ -542,6 +565,12 @@ function computeBankStressIndex() {
     new Map(zSTLFSI.map(d => [formatDate(d.date), d.value]))
   ];
 
+  const availability = [
+    { raw: ted, maxAgeDays: 10 },
+    { raw: cp, maxAgeDays: 40 },
+    { raw: sofr, maxAgeDays: 10 },
+    { raw: stlfsi, maxAgeDays: 10 }
+  ];
   const allDates = [...new Set([
     ...zTED.map(d => formatDate(d.date)),
     ...zCP.map(d => formatDate(d.date)),
@@ -551,11 +580,18 @@ function computeBankStressIndex() {
 
   const result = [];
   for (const dateStr of allDates) {
-    const vals = maps.map(m => m.get(dateStr)).filter(v => v !== undefined);
+    const date = parseDate(dateStr);
+    const vals = maps
+      .map((m, index) => {
+        const activePoint = latestWithin(availability[index].raw, date, availability[index].maxAgeDays);
+        return activePoint ? m.get(formatDate(activePoint.date)) : undefined;
+      })
+      .filter(v => v !== undefined);
+
+    // 週次・月次系列は短期間だけ直近値を引き継ぎ、古すぎる系列は除外する。
     if (vals.length >= 2) {
-      // 欠損があっても2系列以上あれば平均を計算し、利用可能な情報だけで指数を継続させる。
       const bsi = d3.mean(vals);
-      result.push({ date: parseDate(dateStr), value: bsi });
+      result.push({ date, value: bsi });
     }
   }
   return { bsi: result, components: { TEDRATE: zTED, CP: zCP, SOFR: zSOFR, STLFSI: zSTLFSI } };
@@ -588,16 +624,17 @@ function renderBankStress() {
   sigEl.textContent = level.label;
 
   // コンポーネント値の表示
-  const tedVal = last(allData.TEDRATE)?.value;
+  const latestDate = last(bsi).date;
+  const tedPoint = latestWithin(allData.TEDRATE, latestDate, 10);
   const cpData = computeCPSpread(allData.CP3M, allData.DTB3);
-  const cpVal = cpData.length ? last(cpData).value : null;
-  const sofrVal = last(allData.SOFR)?.value;
-  const stlfsiVal = last(allData.STLFSI)?.value;
+  const cpPoint = latestWithin(cpData, latestDate, 40);
+  const sofrPoint = latestWithin(allData.SOFR, latestDate, 10);
+  const stlfsiPoint = latestWithin(allData.STLFSI, latestDate, 10);
 
-  if (tedVal != null) document.getElementById('bcTED').textContent = tedVal.toFixed(2);
-  if (cpVal != null) document.getElementById('bcCP').textContent = cpVal.toFixed(2);
-  if (sofrVal != null) document.getElementById('bcSOFR').textContent = sofrVal.toFixed(2);
-  if (stlfsiVal != null) document.getElementById('bcSTLFSI').textContent = stlfsiVal.toFixed(2);
+  document.getElementById('bcTED').textContent = tedPoint ? tedPoint.value.toFixed(2) : '—';
+  document.getElementById('bcCP').textContent = cpPoint ? cpPoint.value.toFixed(2) : '—';
+  document.getElementById('bcSOFR').textContent = sofrPoint ? sofrPoint.value.toFixed(2) : '—';
+  document.getElementById('bcSTLFSI').textContent = stlfsiPoint ? stlfsiPoint.value.toFixed(2) : '—';
 
   // チャート描画: BSIスコア推移
   const filtered = filterByPeriod(bsi);
@@ -653,7 +690,7 @@ function renderAlerts() {
   const spreadSig = sigma(diff);
   const cccChg = change20d(ccc);
   const bbChg = change20d(bb);
-  const corrData = rollingCorrelation(hy, emhy, 30);
+  const corrData = rollingChangeCorrelation(hy, emhy, 20, 30);
   const corrVal = corrData.length ? last(corrData).value : 0;
 
   if (hyVal > 7) alerts.push({ level: 'danger', msg: `US HY OAS ${hyVal.toFixed(2)}% — 700bps超、信用収縮ゾーン` });
@@ -668,7 +705,7 @@ function renderAlerts() {
   if (spreadSig > 2) alerts.push({ level: 'danger', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 質への逃避が加速` });
   else if (spreadSig > 1) alerts.push({ level: 'warn', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 信用差別化の兆候` });
 
-  if (cccChg && bbChg && bbChg !== 0 && Math.abs(cccChg / bbChg) > 3) {
+  if (cccChg !== null && bbChg !== null && bbChg !== 0 && Math.abs(cccChg / bbChg) > 3) {
     alerts.push({ level: 'danger', msg: `CCC/BB変化率比 ${(cccChg / bbChg).toFixed(1)}x — パニック初期段階の可能性` });
   }
 

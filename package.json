@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
+    "fetch:data": "node scripts/fetch-fred.js",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "gh-pages -d dist"
