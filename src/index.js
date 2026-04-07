@@ -28,6 +28,8 @@ const LABELS = {
 
 let allData = {};
 let currentPeriod = '3y';
+let bankStressCache = null;
+const seriesTimeCache = new WeakMap();
 const parseDate = d3.timeParse('%Y-%m-%d');
 const formatDate = d3.timeFormat('%Y-%m-%d');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -53,6 +55,7 @@ async function startFetch() {
     Object.entries(json.series).forEach(([key, values]) => {
       allData[key] = values.map(d => ({ date: parseDate(d.date), value: d.value }));
     });
+    bankStressCache = null;
     document.getElementById('lastUpdate').textContent =
       `最終更新: ${json.lastUpdated.slice(0, 10)}`;
     renderAll();
@@ -151,14 +154,54 @@ function rollingChangeCorrelation(a, b, changeWindow = 20, corrWindow = 30) {
 }
 
 function latestWithin(series, targetDate, maxAgeDays) {
-  let candidate = null;
-  for (const point of series) {
-    if (point.date > targetDate) break;
-    candidate = point;
+  let times = seriesTimeCache.get(series);
+  if (!times) {
+    times = series.map(point => point.date.getTime());
+    seriesTimeCache.set(series, times);
   }
-  if (!candidate) return null;
+
+  const targetTime = targetDate.getTime();
+  let lo = 0;
+  let hi = times.length - 1;
+  let candidateIndex = -1;
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (times[mid] <= targetTime) {
+      candidateIndex = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  if (candidateIndex === -1) return null;
+  const candidate = series[candidateIndex];
   const ageDays = (targetDate - candidate.date) / MS_PER_DAY;
   return ageDays <= maxAgeDays ? candidate : null;
+}
+
+function alignSeriesValues(series, targetDates, maxAgeDays) {
+  const result = [];
+  let index = 0;
+  let latest = null;
+
+  for (const targetDate of targetDates) {
+    while (index < series.length && series[index].date <= targetDate) {
+      latest = series[index];
+      index += 1;
+    }
+
+    if (!latest) {
+      result.push(undefined);
+      continue;
+    }
+
+    const ageDays = (targetDate - latest.date) / MS_PER_DAY;
+    result.push(ageDays <= maxAgeDays ? latest.value : undefined);
+  }
+
+  return result;
 }
 
 function sigma(data, lookbackDays = 252) {
@@ -277,6 +320,7 @@ function renderAll() {
   renderSpreadChart();
   renderVelocityChart();
   renderEMChart();
+  if (allData.TEDRATE) renderBankStress();
   renderAlerts();
   updateOverallSignal();
 }
@@ -333,6 +377,18 @@ function renderMetrics() {
     const corrColor = corrVal > 0.8 ? 'var(--red)' : corrVal > 0.6 ? 'var(--yellow)' : 'var(--green)';
     document.getElementById('mCorr').textContent = corrVal.toFixed(3);
     document.getElementById('mCorr').style.color = corrColor;
+  }
+
+  if (allData.TEDRATE) {
+    const { bsi } = getBankStressIndex();
+    if (bsi.length) {
+      const bankScore = 50 + 10 * last(bsi).value;
+      const bankLevel = bankScoreLevel(bankScore);
+      document.getElementById('mBankScore').textContent = bankScore.toFixed(1);
+      document.getElementById('mBankScore').style.color = bankLevel.color;
+      document.getElementById('mBankLevel').textContent = bankLevel.label;
+      document.getElementById('mBankLevel').style.color = bankLevel.color;
+    }
   }
 }
 
@@ -520,9 +576,157 @@ function renderEMChart() {
 // ═══════════════════════════════════════════
 // BANK STRESS INDEX
 // ═══════════════════════════════════════════
-// 銀行ストレス指数は一時的に無効化。
-// 計算コストが高く、提供終了済み系列の扱いも再設計が必要なため、
-// 描画・アラート・総合判定への組み込みを止めている。
+function computeCPSpread(cp3m, dtb3) {
+  const dtb3Map = new Map(dtb3.map(d => [formatDate(d.date), d.value]));
+  return cp3m
+    .filter(d => dtb3Map.has(formatDate(d.date)))
+    .map(d => ({ date: d.date, value: d.value - dtb3Map.get(formatDate(d.date)) }));
+}
+
+function zscoreArray(data) {
+  const result = [];
+  let count = 0;
+  let sum = 0;
+  let sumSq = 0;
+
+  for (const point of data) {
+    count += 1;
+    sum += point.value;
+    sumSq += point.value * point.value;
+
+    const mean = sum / count;
+    const variance = count > 1 ? (sumSq - (sum * sum) / count) / (count - 1) : 0;
+    const std = variance > 0 ? Math.sqrt(variance) : 0;
+
+    result.push({
+      date: point.date,
+      value: std ? (point.value - mean) / std : 0
+    });
+  }
+
+  return result;
+}
+
+function computeBankStressIndex() {
+  const ted = allData.TEDRATE || [];
+  const cp = computeCPSpread(allData.CP3M || [], allData.DTB3 || []);
+  const sofr = allData.SOFR || [];
+  const stlfsi = allData.STLFSI || [];
+
+  const zTED = zscoreArray(ted);
+  const zCP = zscoreArray(cp);
+  const zSOFR = zscoreArray(sofr);
+  const zSTLFSI = zscoreArray(stlfsi);
+
+  const allDates = [...new Set([
+    ...zTED.map(d => d.date.getTime()),
+    ...zCP.map(d => d.date.getTime()),
+    ...zSOFR.map(d => d.date.getTime()),
+    ...zSTLFSI.map(d => d.date.getTime())
+  ])]
+    .sort((a, b) => a - b)
+    .map(ts => new Date(ts));
+
+  const alignedValues = [
+    alignSeriesValues(zTED, allDates, 10),
+    alignSeriesValues(zCP, allDates, 40),
+    alignSeriesValues(zSOFR, allDates, 10),
+    alignSeriesValues(zSTLFSI, allDates, 10)
+  ];
+
+  const bsi = [];
+  for (let i = 0; i < allDates.length; i++) {
+    const vals = alignedValues
+      .map(values => values[i])
+      .filter(v => v !== undefined);
+
+    if (vals.length >= 2) {
+      bsi.push({ date: allDates[i], value: d3.mean(vals) });
+    }
+  }
+
+  return {
+    bsi,
+    components: { TEDRATE: zTED, CP: zCP, SOFR: zSOFR, STLFSI: zSTLFSI }
+  };
+}
+
+function getBankStressIndex() {
+  if (!bankStressCache) bankStressCache = computeBankStressIndex();
+  return bankStressCache;
+}
+
+function bankScoreLevel(score) {
+  if (score >= 65) return { label: '危機', color: 'var(--red)', cls: 'signal-red' };
+  if (score >= 55) return { label: '警戒', color: 'var(--yellow)', cls: 'signal-yellow' };
+  if (score >= 45) return { label: '注意', color: 'var(--yellow)', cls: 'signal-yellow' };
+  return { label: '正常', color: 'var(--green)', cls: 'signal-green' };
+}
+
+function renderBankStress() {
+  const { bsi } = getBankStressIndex();
+  if (!bsi.length) return;
+
+  const currentBSI = last(bsi).value;
+  const score = 50 + 10 * currentBSI;
+  const level = bankScoreLevel(score);
+
+  document.getElementById('mBankScore').textContent = score.toFixed(1);
+  document.getElementById('mBankScore').style.color = level.color;
+  document.getElementById('mBankLevel').textContent = level.label;
+  document.getElementById('mBankLevel').style.color = level.color;
+
+  const sigEl = document.getElementById('bankSignal');
+  sigEl.className = 'card-signal ' + level.cls;
+  sigEl.textContent = level.label;
+
+  const latestDate = last(bsi).date;
+  const sofrPoint = latestWithin(allData.SOFR, latestDate, 10);
+  const stlfsiPoint = latestWithin(allData.STLFSI, latestDate, 10);
+  document.getElementById('bcSOFR').textContent = sofrPoint ? sofrPoint.value.toFixed(2) : '—';
+  document.getElementById('bcSTLFSI').textContent = stlfsiPoint ? stlfsiPoint.value.toFixed(2) : '—';
+
+  const filtered = filterByPeriod(bsi);
+  const scoreData = filtered.map(d => ({ date: d.date, value: 50 + 10 * d.value }));
+  const { g, innerW, innerH } = createSVG('chartBank');
+
+  const x = d3.scaleTime().domain(d3.extent(scoreData, d => d.date)).range([0, innerW]);
+  const yMin = Math.min(d3.min(scoreData, d => d.value), 30);
+  const yMax = Math.max(d3.max(scoreData, d => d.value), 70);
+  const y = d3.scaleLinear().domain([yMin, yMax * 1.05]).range([innerH, 0]);
+
+  addAxes(g, x, y, innerW, innerH, '.0f', 3);
+  addThresholdLine(g, y, innerW, 45, '注意', 'var(--yellow)');
+  addThresholdLine(g, y, innerW, 55, '警戒', 'var(--yellow)');
+  addThresholdLine(g, y, innerW, 65, '危機', 'var(--red)');
+  addThresholdLine(g, y, innerW, 50, '基準', 'var(--text-muted)');
+
+  const areaAbove = d3.area()
+    .x(d => x(d.date))
+    .y0(d => y(Math.min(d.value, 55)))
+    .y1(d => y(Math.max(d.value, 55)))
+    .curve(d3.curveMonotoneX);
+
+  g.append('path')
+    .datum(scoreData.filter(d => d.value > 55))
+    .attr('fill', 'rgba(239, 68, 68, 0.08)')
+    .attr('d', areaAbove);
+
+  const line = d3.line().x(d => x(d.date)).y(d => y(d.value)).curve(d3.curveMonotoneX);
+  g.append('path')
+    .datum(scoreData)
+    .attr('fill', 'none')
+    .attr('stroke', COLORS.BANK)
+    .attr('stroke-width', 2)
+    .attr('d', line);
+
+  addHoverOverlay(g, 'chartBank', 'tooltipBank', x, innerW, innerH, [scoreData], (date) => {
+    const closest = scoreData.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
+    const lvl = bankScoreLevel(closest.value);
+    return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.BANK}">Score</span><span>${closest.value.toFixed(1)}</span></div>` +
+      `<div class="tooltip-row"><span class="tooltip-label">判定</span><span style="color:${lvl.color}">${lvl.label}</span></div>`;
+  });
+}
 
 function renderAlerts() {
   const alerts = [];
@@ -556,6 +760,17 @@ function renderAlerts() {
     alerts.push({ level: 'danger', msg: `US-EM相関 ${corrVal.toFixed(3)} かつ両方拡大中 — システミックリスク` });
   }
 
+  if (allData.TEDRATE) {
+    const { bsi } = getBankStressIndex();
+    if (bsi.length) {
+      const bankScore = 50 + 10 * last(bsi).value;
+      if (bankScore >= 65) alerts.push({ level: 'danger', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 危機水準` });
+      else if (bankScore >= 55) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 警戒水準` });
+      else if (bankScore >= 45) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 注意水準` });
+      else alerts.push({ level: 'ok', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 正常` });
+    }
+  }
+
   if (!alerts.some(a => a.level === 'danger' || a.level === 'warn')) {
     alerts.push({ level: 'ok', msg: '全指標が平常レンジ内 — 信用市場は安定' });
   }
@@ -577,11 +792,17 @@ function updateOverallSignal() {
 
   let level = 'green';
   let label = '安定';
+  let bankScore = 0;
 
-  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差の
+  if (allData.TEDRATE) {
+    const { bsi } = getBankStressIndex();
+    if (bsi.length) bankScore = 50 + 10 * last(bsi).value;
+  }
+
+  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差、銀行ストレスの
   // どれかが閾値を超えたら段階的に色を引き上げる設計にしている。
-  if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1) { level = 'yellow'; label = '注意'; }
-  if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2) { level = 'red'; label = '警戒'; }
+  if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1 || bankScore >= 45) { level = 'yellow'; label = '注意'; }
+  if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2 || bankScore >= 65) { level = 'red'; label = '警戒'; }
 
   const el = document.getElementById('overallSignal');
   el.className = `overall-signal signal-${level}`;
