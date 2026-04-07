@@ -583,6 +583,7 @@
         <span id="mCorrLabel" style="color:var(--text-muted)">— 警戒: &gt;0.8</span>
       </div>
     </div>
+    <!--
     <div class="metric-card" title="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。">
       <div class="metric-label">銀行ストレス Score</div>
       <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
@@ -590,6 +591,7 @@
         <span class="metric-change" id="mBankLevel">—</span>
       </div>
     </div>
+    -->
   </div>
 
   <!-- Chart 1: OAS by rating -->
@@ -643,21 +645,14 @@
     <div class="chart-desc">米国と新興国のHYスプレッドを比較。30日相関が0.8超かつ両方拡大時はシステミックリスクを示唆。</div>
   </div>
 
-  <!-- Bank Stress Index: Chart -->
+  <!--
+  Bank Stress Index: Chart
   <div class="card">
     <div class="card-title">
       <span>銀行ストレス指数</span>
       <span class="card-signal" id="bankSignal"></span>
     </div>
     <div class="bank-components" style="margin-bottom: var(--space-md);">
-      <div class="bank-component">
-        <span class="bank-comp-label">TED</span>
-        <span class="bank-comp-value" id="bcTED">—</span>
-      </div>
-      <div class="bank-component">
-        <span class="bank-comp-label">CP</span>
-        <span class="bank-comp-value" id="bcCP">—</span>
-      </div>
       <div class="bank-component">
         <span class="bank-comp-label">SOFR</span>
         <span class="bank-comp-value" id="bcSOFR">—</span>
@@ -669,8 +664,9 @@
     </div>
     <div class="chart-container" id="chartBank" role="img" aria-label="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。"></div>
     <div class="tooltip" id="tooltipBank"></div>
-    <div class="chart-desc">TED Spread・CP Spread・SOFR・St.Louis FSIのZスコア平均。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
+    <div class="chart-desc">SOFR・St.Louis FSIを中心に銀行・資金市場ストレスを集約。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
   </div>
+  -->
 
 </main>
 

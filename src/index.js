@@ -277,7 +277,6 @@ function renderAll() {
   renderSpreadChart();
   renderVelocityChart();
   renderEMChart();
-  if (allData.TEDRATE) renderBankStress();
   renderAlerts();
   updateOverallSignal();
 }
@@ -521,165 +520,9 @@ function renderEMChart() {
 // ═══════════════════════════════════════════
 // BANK STRESS INDEX
 // ═══════════════════════════════════════════
-function computeCPSpread(cp3m, dtb3) {
-  const dtb3Map = new Map(dtb3.map(d => [formatDate(d.date), d.value]));
-  return cp3m
-    .filter(d => dtb3Map.has(formatDate(d.date)))
-    // CP金利から3カ月T-Billを引いた短期資金調達プレミアム。
-    // 銀行・企業の短期資金市場が詰まり始めると上がりやすい。
-    .map(d => ({ date: d.date, value: d.value - dtb3Map.get(formatDate(d.date)) }));
-}
-
-function zscoreArray(data) {
-  const result = [];
-  for (let i = 0; i < data.length; i++) {
-    const history = data.slice(0, i + 1);
-    const mean = d3.mean(history, d => d.value);
-    const std = d3.deviation(history, d => d.value);
-    // 将来データを使わず、その時点までの履歴だけで標準化する。
-    result.push({
-      date: data[i].date,
-      value: std ? (data[i].value - mean) / std : 0
-    });
-  }
-  return result;
-}
-
-function computeBankStressIndex() {
-  const ted = allData.TEDRATE;
-  const cp = computeCPSpread(allData.CP3M, allData.DTB3);
-  const sofr = allData.SOFR;
-  const stlfsi = allData.STLFSI;
-
-  const zTED = zscoreArray(ted);
-  const zCP = zscoreArray(cp);
-  const zSOFR = zscoreArray(sofr);
-  const zSTLFSI = zscoreArray(stlfsi);
-  // TED、CPスプレッド、SOFR、水準化済みFSIを同じ土俵に乗せる。
-  // それぞれ短期金融市場、資金調達環境、政策金利近辺の逼迫、金融環境全体の歪みを代表する。
-
-  const maps = [
-    new Map(zTED.map(d => [formatDate(d.date), d.value])),
-    new Map(zCP.map(d => [formatDate(d.date), d.value])),
-    new Map(zSOFR.map(d => [formatDate(d.date), d.value])),
-    new Map(zSTLFSI.map(d => [formatDate(d.date), d.value]))
-  ];
-
-  const availability = [
-    { raw: ted, maxAgeDays: 10 },
-    { raw: cp, maxAgeDays: 40 },
-    { raw: sofr, maxAgeDays: 10 },
-    { raw: stlfsi, maxAgeDays: 10 }
-  ];
-  const allDates = [...new Set([
-    ...zTED.map(d => formatDate(d.date)),
-    ...zCP.map(d => formatDate(d.date)),
-    ...zSOFR.map(d => formatDate(d.date)),
-    ...zSTLFSI.map(d => formatDate(d.date))
-  ])].sort();
-
-  const result = [];
-  for (const dateStr of allDates) {
-    const date = parseDate(dateStr);
-    const vals = maps
-      .map((m, index) => {
-        const activePoint = latestWithin(availability[index].raw, date, availability[index].maxAgeDays);
-        return activePoint ? m.get(formatDate(activePoint.date)) : undefined;
-      })
-      .filter(v => v !== undefined);
-
-    // 週次・月次系列は短期間だけ直近値を引き継ぎ、古すぎる系列は除外する。
-    if (vals.length >= 2) {
-      const bsi = d3.mean(vals);
-      result.push({ date, value: bsi });
-    }
-  }
-  return { bsi: result, components: { TEDRATE: zTED, CP: zCP, SOFR: zSOFR, STLFSI: zSTLFSI } };
-}
-
-function bankScoreLevel(score) {
-  if (score >= 65) return { label: '危機', color: 'var(--red)', cls: 'signal-red' };
-  if (score >= 55) return { label: '警戒', color: 'var(--yellow)', cls: 'signal-yellow' };
-  if (score >= 45) return { label: '注意', color: 'var(--yellow)', cls: 'signal-yellow' };
-  return { label: '正常', color: 'var(--green)', cls: 'signal-green' };
-}
-
-function renderBankStress() {
-  const { bsi, components } = computeBankStressIndex();
-  if (!bsi.length) return;
-
-  const currentBSI = last(bsi).value;
-  // 標準化平均の0を50点に置き、1σを10点としてスコア化する。
-  // 直感的に読めるようにするための表示用変換で、相対比較の順位はBSI本体と同じ。
-  const score = 50 + 10 * currentBSI;
-  const level = bankScoreLevel(score);
-
-  document.getElementById('mBankScore').textContent = score.toFixed(1);
-  document.getElementById('mBankScore').style.color = level.color;
-  document.getElementById('mBankLevel').textContent = level.label;
-  document.getElementById('mBankLevel').style.color = level.color;
-
-  const sigEl = document.getElementById('bankSignal');
-  sigEl.className = 'card-signal ' + level.cls;
-  sigEl.textContent = level.label;
-
-  // コンポーネント値の表示
-  const latestDate = last(bsi).date;
-  const tedPoint = latestWithin(allData.TEDRATE, latestDate, 10);
-  const cpData = computeCPSpread(allData.CP3M, allData.DTB3);
-  const cpPoint = latestWithin(cpData, latestDate, 40);
-  const sofrPoint = latestWithin(allData.SOFR, latestDate, 10);
-  const stlfsiPoint = latestWithin(allData.STLFSI, latestDate, 10);
-
-  document.getElementById('bcTED').textContent = tedPoint ? tedPoint.value.toFixed(2) : '—';
-  document.getElementById('bcCP').textContent = cpPoint ? cpPoint.value.toFixed(2) : '—';
-  document.getElementById('bcSOFR').textContent = sofrPoint ? sofrPoint.value.toFixed(2) : '—';
-  document.getElementById('bcSTLFSI').textContent = stlfsiPoint ? stlfsiPoint.value.toFixed(2) : '—';
-
-  // チャート描画: BSIスコア推移
-  const filtered = filterByPeriod(bsi);
-  const scoreData = filtered.map(d => ({ date: d.date, value: 50 + 10 * d.value }));
-
-  const { g, innerW, innerH } = createSVG('chartBank');
-
-  const x = d3.scaleTime().domain(d3.extent(scoreData, d => d.date)).range([0, innerW]);
-  const yMin = Math.min(d3.min(scoreData, d => d.value), 30);
-  const yMax = Math.max(d3.max(scoreData, d => d.value), 70);
-  const y = d3.scaleLinear().domain([yMin, yMax * 1.05]).range([innerH, 0]);
-
-  addAxes(g, x, y, innerW, innerH, '.0f', 3);
-  addThresholdLine(g, y, innerW, 45, '注意', 'var(--yellow)');
-  addThresholdLine(g, y, innerW, 55, '警戒', 'var(--yellow)');
-  addThresholdLine(g, y, innerW, 65, '危機', 'var(--red)');
-  addThresholdLine(g, y, innerW, 50, '基準', 'var(--text-muted)');
-
-  // エリア（危機ゾーン）
-  const areaAbove = d3.area()
-    .x(d => x(d.date))
-    .y0(d => y(Math.min(d.value, 55)))
-    .y1(d => y(Math.max(d.value, 55)))
-    .curve(d3.curveMonotoneX);
-
-  g.append('path')
-    .datum(scoreData.filter(d => d.value > 55))
-    .attr('fill', 'rgba(239, 68, 68, 0.08)')
-    .attr('d', areaAbove);
-
-  const line = d3.line().x(d => x(d.date)).y(d => y(d.value)).curve(d3.curveMonotoneX);
-  g.append('path')
-    .datum(scoreData)
-    .attr('fill', 'none')
-    .attr('stroke', COLORS.BANK)
-    .attr('stroke-width', 2)
-    .attr('d', line);
-
-  addHoverOverlay(g, 'chartBank', 'tooltipBank', x, innerW, innerH, [scoreData], (date) => {
-    const closest = scoreData.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
-    const lvl = bankScoreLevel(closest.value);
-    return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.BANK}">Score</span><span>${closest.value.toFixed(1)}</span></div>` +
-      `<div class="tooltip-row"><span class="tooltip-label">判定</span><span style="color:${lvl.color}">${lvl.label}</span></div>`;
-  });
-}
+// 銀行ストレス指数は一時的に無効化。
+// 計算コストが高く、提供終了済み系列の扱いも再設計が必要なため、
+// 描画・アラート・総合判定への組み込みを止めている。
 
 function renderAlerts() {
   const alerts = [];
@@ -713,18 +556,6 @@ function renderAlerts() {
     alerts.push({ level: 'danger', msg: `US-EM相関 ${corrVal.toFixed(3)} かつ両方拡大中 — システミックリスク` });
   }
 
-  // 銀行ストレス指数アラート
-  if (allData.TEDRATE) {
-    const { bsi } = computeBankStressIndex();
-    if (bsi.length) {
-      const bankScore = 50 + 10 * last(bsi).value;
-      if (bankScore >= 65) alerts.push({ level: 'danger', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 危機水準` });
-      else if (bankScore >= 55) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 警戒水準` });
-      else if (bankScore >= 45) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 注意水準` });
-      else alerts.push({ level: 'ok', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 正常` });
-    }
-  }
-
   if (!alerts.some(a => a.level === 'danger' || a.level === 'warn')) {
     alerts.push({ level: 'ok', msg: '全指標が平常レンジ内 — 信用市場は安定' });
   }
@@ -747,16 +578,10 @@ function updateOverallSignal() {
   let level = 'green';
   let label = '安定';
 
-  let bankScore = 0;
-  if (allData.TEDRATE) {
-    const { bsi } = computeBankStressIndex();
-    if (bsi.length) bankScore = 50 + 10 * last(bsi).value;
-  }
-
-  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差、銀行ストレスの
+  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差の
   // どれかが閾値を超えたら段階的に色を引き上げる設計にしている。
-  if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1 || bankScore >= 45) { level = 'yellow'; label = '注意'; }
-  if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2 || bankScore >= 65) { level = 'red'; label = '警戒'; }
+  if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1) { level = 'yellow'; label = '注意'; }
+  if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2) { level = 'red'; label = '警戒'; }
 
   const el = document.getElementById('overallSignal');
   el.className = `overall-signal signal-${level}`;
