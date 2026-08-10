@@ -128,6 +128,8 @@
   .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
   .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
   .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
+  /* データが無く判定できない状態。市場が正常であることと区別する。 */
+  .signal-none { background: rgba(148,163,184,0.08); color: var(--text-muted); border: 1px solid var(--border); }
 
   @keyframes pulse-red {
     0%, 100% { box-shadow: 0 0 0 0 rgba(229,77,77,0.25); }
@@ -148,6 +150,7 @@
   .dot-green { background: var(--green); }
   .dot-yellow { background: var(--yellow); }
   .dot-red { background: var(--red); }
+  .dot-none { background: var(--text-muted); }
 
   /* ═══════════════════════════════════════════
      LAYOUT
@@ -261,6 +264,18 @@
 
   .chart-container-tall {
     height: 300px;
+  }
+
+  /* データが無いチャートのプレースホルダー。空のSVGを出さず理由を明示する。 */
+  .chart-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-family: var(--font-sans);
   }
 
   svg text {
@@ -480,6 +495,125 @@
   }
 
   /* ═══════════════════════════════════════════
+     GUIDE (解説ダイアログ)
+     ═══════════════════════════════════════════ */
+  .help-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .help-btn:hover {
+    color: var(--cyan);
+    border-color: rgba(46,184,212,0.4);
+  }
+
+  /* メトリクスカードでは右上へ絶対配置し、数値表示のレイアウトへ影響させない */
+  .metric-card .help-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+
+  /* チャートカードのタイトル横に置くための左側グループ */
+  .card-title-text {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .guide-dialog {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-md);
+    padding: 0;
+    width: min(560px, 92vw);
+    max-height: 80vh;
+    /* dialogのUA既定margin(auto)で中央配置されるが、明示しておく */
+    margin: auto;
+  }
+
+  .guide-dialog::backdrop {
+    background: rgba(4, 8, 16, 0.6);
+    backdrop-filter: blur(2px);
+  }
+
+  .guide-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .guide-dialog-title {
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .guide-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: var(--text-lg);
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+
+  .guide-close:hover { color: var(--text-primary); }
+
+  .guide-dialog-body {
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
+    overflow-y: auto;
+    max-height: calc(80vh - 56px);
+    font-size: var(--text-base);
+    line-height: 1.7;
+    color: var(--text-secondary);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .guide-dialog-body p { margin-bottom: var(--space-sm); }
+  .guide-dialog-body strong { color: var(--text-primary); }
+
+  .guide-dialog-body ul {
+    padding-left: 1.3em;
+    margin: var(--space-sm) 0 var(--space-md);
+  }
+
+  .guide-dialog-body li { margin-bottom: var(--space-xs); }
+
+  /* 既知の問題・制約などの注意書き */
+  .guide-note {
+    border-left: 2px solid var(--yellow);
+    background: rgba(229,168,22,0.06);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+  }
+
+  .guide-note + .guide-note { margin-top: var(--space-sm); }
+
+  /* ═══════════════════════════════════════════
      RESPONSIVE
      ═══════════════════════════════════════════ */
   @media (max-width: 1200px) {
@@ -521,7 +655,7 @@
     outline-offset: 2px;
   }
 </style>
-  <script type="module" crossorigin src="./assets/index-BrNaBe6c.js"></script>
+  <script type="module" crossorigin src="./assets/index-BenkS_7Q.js"></script>
   <script type="module">import'data:text/javascript,if(!import.meta.resolve)throw Error("import.meta.resolve not supported")';import.meta.url;import("_").catch(()=>1);(async function*(){})().next();window.__vite_is_modern_browser=true</script>
   <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
 </head>
@@ -541,6 +675,7 @@
       <span class="signal-dot dot-green" id="overallDot" aria-hidden="true"></span>
       <span id="overallLabel">LOADING</span>
     </div>
+    <button class="help-btn" data-guide="overview" aria-haspopup="dialog" aria-label="ダッシュボードの読み方を表示">?</button>
   </div>
 </header>
 
@@ -559,6 +694,7 @@
   <!-- Metrics -->
   <div class="metrics-row" id="metricsRow">
     <div class="metric-card" title="HY債全体のスプレッド。5%超で注意、7%超で警戒。">
+      <button class="help-btn" data-guide="oas" aria-haspopup="dialog" aria-label="米国HY OASの解説を表示">?</button>
       <div class="metric-label">米国HY OAS</div>
       <div class="metric-value" id="mHY" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
@@ -566,6 +702,7 @@
       </div>
     </div>
     <div class="metric-card" title="低格付け債の選別売り度合い。1σ超で注意、2σ超で警戒。">
+      <button class="help-btn" data-guide="spread" aria-haspopup="dialog" aria-label="CCC-BBスプレッド差の解説を表示">?</button>
       <div class="metric-label">CCC-BBスプレッド差</div>
       <div class="metric-value" id="mSpread" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
@@ -573,6 +710,7 @@
       </div>
     </div>
     <div class="metric-card" title="CCC格の拡大速度がBB格の何倍か。3倍超はパニックの兆候。">
+      <button class="help-btn" data-guide="ratio" aria-haspopup="dialog" aria-label="CCC/BB変化率比の解説を表示">?</button>
       <div class="metric-label">CCC / BB 変化率比</div>
       <div class="metric-value" id="mRatio" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
@@ -580,6 +718,7 @@
       </div>
     </div>
     <div class="metric-card" title="米国・新興国HYの連動性。0.8超かつ両方拡大時はシステミックリスク。">
+      <button class="help-btn" data-guide="em" aria-haspopup="dialog" aria-label="米国-新興国相関の解説を表示">?</button>
       <div class="metric-label">米国-新興国 相関（30日）</div>
       <div class="metric-value" id="mCorr" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
@@ -587,6 +726,7 @@
       </div>
     </div>
     <div class="metric-card" title="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。">
+      <button class="help-btn" data-guide="bank" aria-haspopup="dialog" aria-label="銀行ストレスScoreの解説を表示">?</button>
       <div class="metric-label">銀行ストレス Score</div>
       <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
@@ -598,7 +738,7 @@
   <!-- Chart 1: OAS by rating -->
   <div class="card card-full">
     <div class="card-title">
-      <span>格付け別OASスプレッド推移</span>
+      <span class="card-title-text">格付け別OASスプレッド推移<button class="help-btn" data-guide="oas" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <div class="period-selector" role="group" aria-label="表示期間">
         <button class="period-btn" onclick="setPeriod('1y', event)" aria-pressed="false">1年</button>
         <button class="period-btn active" onclick="setPeriod('3y', event)" aria-pressed="true">3年</button>
@@ -615,7 +755,7 @@
   <!-- Chart 2: CCC-BB spread diff -->
   <div class="card">
     <div class="card-title">
-      <span>CCC − BB スプレッド差</span>
+      <span class="card-title-text">CCC − BB スプレッド差<button class="help-btn" data-guide="spread" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="spreadSignal"></span>
     </div>
     <div class="chart-container" id="chartSpread" role="img" aria-label="CCC-BBスプレッド差。μ+2σ超で警戒。"></div>
@@ -626,7 +766,7 @@
   <!-- Chart 3: 20d rate of change -->
   <div class="card">
     <div class="card-title">
-      <span>20日変化幅（bps）</span>
+      <span class="card-title-text">20日変化幅（bps）<button class="help-btn" data-guide="velocity" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="velocitySignal"></span>
     </div>
     <div class="chart-container" id="chartVelocity" role="img" aria-label="直近20営業日のスプレッド変化幅。+100bps超で警戒。"></div>
@@ -637,7 +777,7 @@
   <!-- Chart 4: US vs EM -->
   <div class="card">
     <div class="card-title">
-      <span>米国HY vs 新興国HY</span>
+      <span class="card-title-text">米国HY vs 新興国HY<button class="help-btn" data-guide="em" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="emSignal"></span>
     </div>
     <div class="legend" id="legendEM"></div>
@@ -648,7 +788,7 @@
 
   <div class="card">
     <div class="card-title">
-      <span>銀行ストレス指数</span>
+      <span class="card-title-text">銀行ストレス指数<button class="help-btn" data-guide="bank" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="bankSignal"></span>
     </div>
     <div class="bank-components" style="margin-bottom: var(--space-md);">
@@ -668,8 +808,17 @@
 
 </main>
 
+<!-- 解説ダイアログ。内容はindex.jsのGUIDESから流し込み、1つを使い回す -->
+<dialog class="guide-dialog" id="guideDialog" aria-labelledby="guideTitle">
+  <div class="guide-dialog-header">
+    <span class="guide-dialog-title" id="guideTitle"></span>
+    <button class="guide-close" id="guideClose" aria-label="閉じる">✕</button>
+  </div>
+  <div class="guide-dialog-body" id="guideBody"></div>
+</dialog>
+
   <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
   <script nomodule crossorigin id="vite-legacy-polyfill" src="./assets/polyfills-legacy-DgwWR7Ee.js"></script>
-  <script nomodule crossorigin id="vite-legacy-entry" data-src="./assets/index-legacy-C6gYtYGz.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+  <script nomodule crossorigin id="vite-legacy-entry" data-src="./assets/index-legacy-ClQr4Xsg.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
 </body>
 </html>
