@@ -962,6 +962,127 @@ function updateOverallSignal() {
   document.getElementById('overallLabel').textContent = label;
 }
 
+// ═══════════════════════════════════════════
+// GUIDE DIALOG (解説)
+// ═══════════════════════════════════════════
+// 各カードの「?」ボタンから開く解説。docs/credit_stress_monitor_guid.md の
+// 内容を指標ごとに要約したもの。閾値やロジックを変えたら両方更新すること。
+const GUIDES = {
+  overview: {
+    title: 'このダッシュボードの読み方',
+    body: `
+      <p><strong>「世の中のお金の貸し借りがヤバくなりそうかどうか」を監視する画面</strong>です。経済危機の前には「お金を貸している人たちの不安」が先に数字へ表れます。それをリアルタイムで可視化しています。</p>
+      <p><strong>スプレッドとは</strong>：信用が低い企業の金利と、最も安全な金利（米国債）の差。スプレッドの拡大は「お金を貸すのが怖い」と感じる人が増えていることを意味します。</p>
+      <p><strong>アラートログ</strong>：すべての指標を自動判定し、<span style="color:var(--green)">正常</span> / <span style="color:var(--yellow)">注意</span> / <span style="color:var(--red)">警戒</span> の3段階で表示します。</p>
+      <div class="guide-note">右上の総合バッジの判定にはHY水準・20日変化・CCC-BBスプレッド差・銀行Scoreの4つだけが使われ、CCC/BB変化率比とUS-EM相関は含まれません。アラートログに赤い「警戒」があってもバッジが「安定」になる場合があります（既知の問題として修正予定）。バッジだけでなくアラートログも確認してください。</div>
+    `
+  },
+  oas: {
+    title: '米国HY OAS',
+    body: `
+      <p>「HY」はHigh Yield（ハイイールド）の略で、信用が低い企業の債券のこと。OASはその上乗せ金利（スプレッド）で、<strong>市場全体の信用プレミアム</strong>を示します。</p>
+      <ul>
+        <li><span style="color:var(--green)">5%以下</span>：平常レンジ（歴史的には3%前後が安心の目安）</li>
+        <li><span style="color:var(--yellow)">5%超え</span>：注意</li>
+        <li><span style="color:var(--red)">7%超え</span>：警戒（信用収縮ゾーン）</li>
+      </ul>
+      <p>「20d」は20営業日（約1ヶ月）前からの変化。<strong>+50bps超で注意、+100bps超で警戒</strong>です。</p>
+      <p><strong>チャートの見方</strong>：線と線の間隔が一定なら市場は落ち着いています。CCC（赤）だけが上へ離れていったら「弱い企業から信用が剥がれ始めている」サイン。点線は注意ライン（5%）と警戒ライン（7%）です。</p>
+      <div class="guide-note">データ提供元（FRED）の仕様変更により、OAS系列は直近約3年分しか取得できません。「5年」「全期間」を選んでも約3年分しか表示されません。</div>
+    `
+  },
+  spread: {
+    title: 'CCC-BBスプレッド差',
+    body: `
+      <p>「かなり危ない企業（CCC）」と「まあまあの企業（BB）」の金利差です。急に広がると<strong>市場が一番弱いところから見捨て始めている</strong>ことを意味します。</p>
+      <ul>
+        <li><span style="color:var(--yellow)">1σ超え</span>：注意（信用差別化の兆候）</li>
+        <li><span style="color:var(--red)">2σ超え</span>：警戒（普段ではありえないレベルの異常値）</li>
+      </ul>
+      <p>σ（シグマ）は「過去1年の普段の振れ幅からどれだけ外れているか」。水準そのものではなく異常度で判定します。</p>
+      <p><strong>チャートの見方</strong>：点線のμは過去1年の平均、+2σは「これ以上は異常」のライン。赤い面積が大きくなるほど弱い企業と強い企業の差が広がっています。</p>
+    `
+  },
+  ratio: {
+    title: 'CCC / BB 変化率比',
+    body: `
+      <p>CCCのスプレッドの動きが、BBの<strong>何倍の速さ</strong>で動いているかを示します。全体の平均は変わっていないのに弱い企業だけが崩れ始める異変を捉えるための指標です。</p>
+      <ul>
+        <li><span style="color:var(--green)">1倍前後</span>：全体が均等に動いている（正常）</li>
+        <li><span style="color:var(--yellow)">2倍超え</span>：弱い企業の動きが目立ち始めた（注意）</li>
+        <li><span style="color:var(--red)">3倍超え</span>：弱い企業だけが急速に悪化（パニック初期の可能性・警戒）</li>
+      </ul>
+      <div class="guide-note"><strong>この指標は単独で信用しないでください。</strong>判定は比率の絶対値で行われるため、CCCが改善している局面でも警戒表示になることがあります。また分母（BBの変化）がゼロに近いと比率だけが極端に大きく出ます。数字が大きいときは20日変化幅チャートでCCCの実際の動き（bps）を必ず確認してください。計算方法は既知の問題として見直し予定です。</div>
+    `
+  },
+  em: {
+    title: '米国-新興国 相関',
+    body: `
+      <p>米国と新興国の信用市場が<strong>同じ方向に動いているか</strong>を示す数値です。1に近いほど「世界中で同時にお金の貸し借りがおかしくなっている」危険な状態です。</p>
+      <ul>
+        <li><span style="color:var(--yellow)">0.6超え</span>：連動が強まってきた（注意）</li>
+        <li><span style="color:var(--red)">0.8超え＋両方悪化中</span>：世界同時の信用不安（システミックリスク・警戒）</li>
+        <li><span style="color:var(--green)">低い値</span>：問題が一部の地域に限定されている</li>
+      </ul>
+      <p><strong>チャートの見方</strong>：2本の線が同じ方向に同じタイミングで動いていたら要注意です。</p>
+      <div class="guide-note">数字カードの色は相関値が0.8を超えただけで赤になりますが、チャートとアラートの「全面警戒」は「両方のスプレッドが拡大中」も条件です。カードが赤でもアラートに出ていなければ、相関は高いがどちらかが改善方向ということです。</div>
+    `
+  },
+  velocity: {
+    title: '20日変化幅',
+    body: `
+      <p>スプレッドが20営業日（約1ヶ月）でどれだけ動いたかをbps（0.01%）で表示します。<strong>水準ではなくスピードを見るチャート</strong>です。じわじわ上がるのと急に上がるのでは意味が全く違います。</p>
+      <ul>
+        <li><span style="color:var(--yellow)">+50bps超え</span>：拡大傾向（注意）</li>
+        <li><span style="color:var(--red)">+100bps超え</span>：異常な速さで悪化中（警戒）</li>
+      </ul>
+      <p>短期間の急拡大は、イベントドリブンな悪化（何か起きた）を示しやすいシグナルです。</p>
+    `
+  },
+  bank: {
+    title: '銀行ストレス Score',
+    body: `
+      <p>銀行間の資金調達ストレスを数値化した指標です。企業の信用スプレッドが「一般企業の健康診断」なら、これは「銀行という血管の健康診断」。構成指標をZスコア化して平均し、<strong>Score = 50 + 10 × BSI</strong> として表示します。</p>
+      <ul>
+        <li><span style="color:var(--green)">45未満</span>：正常</li>
+        <li><span style="color:var(--yellow)">45以上55未満</span>：注意</li>
+        <li><span style="color:var(--yellow)">55以上65未満</span>：警戒</li>
+        <li><span style="color:var(--red)">65以上</span>：危機</li>
+      </ul>
+      <div class="guide-note">4指標のうちTED Spreadは2022年、CP Spreadの元データは1997年にFRED側で提供終了しており、<strong>現在のScoreはSOFRとSt.Louis FSIの2指標だけで算出</strong>されています。構成数が時期で変わるため、昔と今のScoreは厳密には同じものさしではありません。</div>
+      <div class="guide-note">定義上「完全に平均的な状態」がちょうど50ですが、45以上が「注意」のため、<strong>市場が普通でも「注意」と表示されます</strong>。50前後の「注意」は実質的に平常と考えてください（既知の問題として見直し予定）。</div>
+    `
+  }
+};
+
+const guideDialog = document.getElementById('guideDialog');
+
+function openGuide(key) {
+  const guide = GUIDES[key];
+  if (!guide || !guideDialog) return;
+  document.getElementById('guideTitle').textContent = guide.title;
+  document.getElementById('guideBody').innerHTML = guide.body;
+  guideDialog.showModal();
+  // 前回のスクロール位置を持ち越さない
+  document.getElementById('guideBody').scrollTop = 0;
+}
+
+if (guideDialog) {
+  // 「?」ボタンはイベント委譲でまとめて拾う（Escで閉じるのはdialog標準機能）
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.help-btn') : null;
+    if (btn && btn.dataset.guide) openGuide(btn.dataset.guide);
+  });
+
+  document.getElementById('guideClose').addEventListener('click', () => guideDialog.close());
+
+  // ダイアログ外（backdrop）クリックで閉じる。パネル内はヘッダー・本文が
+  // 全面を覆っているため、e.targetがdialog自身になるのは外側クリックのみ。
+  guideDialog.addEventListener('click', (e) => {
+    if (e.target === guideDialog) guideDialog.close();
+  });
+}
+
 // Resize handler
 let resizeTimer;
 window.addEventListener('resize', () => {
