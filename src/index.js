@@ -26,6 +26,16 @@ const LABELS = {
   STLFSI:  'StL FSI'
 };
 
+// fred.jsonに含まれるべき系列。欠けていても描画は続行し、空配列で埋める。
+const SERIES_KEYS = ['HY', 'BB', 'B', 'CCC', 'EMHY', 'TEDRATE', 'CP3M', 'DTB3', 'SOFR', 'STLFSI'];
+
+// これらが欠けるとメトリクス・アラート・総合シグナルが成立しないため、
+// 揃っていない場合は描画せずエラー表示へ倒す。
+const REQUIRED_SERIES = ['HY', 'BB', 'CCC', 'EMHY'];
+
+// 20営業日変化の算出に最低21点必要。それ未満の系列は必須要件を満たさないとみなす。
+const MIN_POINTS = 21;
+
 let allData = {};
 let currentPeriod = '3y';
 let bankStressCache = null;
@@ -47,23 +57,81 @@ updateClock();
 // ═══════════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════════
+// 有限な数値だけを通す。null・空文字・真偽値をNumber()に渡すと0になってしまい、
+// 欠測が「0」という実データとして紛れ込むため、型を絞ってから変換する。
+function toFiniteNumber(raw) {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  return Number.isFinite(num) ? num : null;
+}
+
+// 1系列を{date: Date, value: number}へ正規化する。
+// 日付としてパースできない点、数値でない点、無限大・NaNは黙って捨てる。
+// FRED側の欠測は "." で返るため、そのまま数値化すると系列全体が壊れる。
+function normalizeSeries(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map(d => {
+      if (!d || typeof d !== 'object') return null;
+      const date = typeof d.date === 'string' ? parseDate(d.date) : null;
+      const value = toFiniteNumber(d.value);
+      if (!date || value === null) return null;
+      return { date, value };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date - b.date);
+}
+
+// 必須系列が揃っているかを検証し、不足していれば理由を返す。
+function validateData(data) {
+  const missing = REQUIRED_SERIES.filter(k => !data[k] || !data[k].length);
+  if (missing.length) return `必須系列が取得できません: ${missing.join(', ')}`;
+
+  const tooShort = REQUIRED_SERIES.filter(k => data[k].length < MIN_POINTS);
+  if (tooShort.length) {
+    return `データ件数が不足しています（各${MIN_POINTS}件必要）: ${tooShort.join(', ')}`;
+  }
+  return null;
+}
+
+function showDataError(message) {
+  console.error('データ読み込みエラー:', message);
+  const logEl = document.getElementById('alertLog');
+  logEl.innerHTML = `<div class="alert-item"><span class="alert-level alert-danger">エラー</span><span class="alert-msg">${message}</span></div>`;
+  document.getElementById('overallLabel').textContent = 'ERROR';
+  ['chartOAS', 'chartSpread', 'chartVelocity', 'chartEM', 'chartBank']
+    .forEach(id => renderEmptyState(id, 'データを表示できません'));
+}
+
 async function startFetch() {
   try {
     const res = await fetch('./data/fred.json');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    Object.entries(json.series).forEach(([key, values]) => {
-      allData[key] = values.map(d => ({ date: parseDate(d.date), value: d.value }));
-    });
+
+    if (!json || typeof json !== 'object' || !json.series || typeof json.series !== 'object') {
+      throw new Error('fred.jsonの形式が不正です（series が見つかりません）');
+    }
+
+    // 未知のキーが増えても拾えるよう、既知キーとJSON側のキーの和集合で正規化する。
+    const keys = [...new Set([...SERIES_KEYS, ...Object.keys(json.series)])];
+    const parsed = {};
+    keys.forEach(key => { parsed[key] = normalizeSeries(json.series[key]); });
+
+    const invalid = validateData(parsed);
+    if (invalid) throw new Error(invalid);
+
+    allData = parsed;
     bankStressCache = null;
-    document.getElementById('lastUpdate').textContent =
-      `最終更新: ${json.lastUpdated.slice(0, 10)}`;
+
+    const lastUpdated = typeof json.lastUpdated === 'string' ? json.lastUpdated.slice(0, 10) : '不明';
+    document.getElementById('lastUpdate').textContent = `最終更新: ${lastUpdated}`;
     renderAll();
   } catch (e) {
-    console.error('データ読み込みエラー:', e.message);
-    const logEl = document.getElementById('alertLog');
-    logEl.innerHTML = `<div class="alert-item"><span class="alert-level alert-danger">エラー</span><span class="alert-msg">データの読み込みに失敗しました: ${e.message}</span></div>`;
-    document.getElementById('overallLabel').textContent = 'ERROR';
+    showDataError(`データの読み込みに失敗しました: ${e.message}`);
   }
 }
 
@@ -85,6 +153,7 @@ function setPeriod(p, e) {
 }
 
 function filterByPeriod(data) {
+  if (!Array.isArray(data)) return [];
   if (currentPeriod === 'all') return data;
   const years = { '1y': 1, '3y': 3, '5y': 5 };
   const cutoff = new Date();
@@ -95,16 +164,27 @@ function filterByPeriod(data) {
 // ═══════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════
-function last(arr) { return arr[arr.length - 1]; }
+// 空・未定義でも例外にせずnullを返す。呼び出し側は必ずnull判定すること。
+function last(arr) {
+  return Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+}
+
+// ツールチップ用に指定日時へ最も近い点を返す。
+// reduce()を初期値なしで空配列に使うとTypeErrorになるため、その回避も兼ねる。
+function nearest(data, date) {
+  if (!Array.isArray(data) || !data.length) return null;
+  return data.reduce((a, b) => (Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a));
+}
 
 function change20d(data) {
-  if (data.length < 21) return null;
+  if (!Array.isArray(data) || data.length < 21) return null;
   // 直近値と20営業日前の差を%ptで求め、100倍してbpsに変換する。
   // 例: 4.20% -> 4.80% は 0.60%pt = 60bps。
   return (last(data).value - data[data.length - 21].value) * 100; // bps
 }
 
 function rollingChange(data, window = 20) {
+  if (!Array.isArray(data)) return [];
   const result = [];
   for (let i = window; i < data.length; i++) {
     result.push({
@@ -117,6 +197,7 @@ function rollingChange(data, window = 20) {
 }
 
 function spreadDiff(ccc, bb) {
+  if (!Array.isArray(ccc) || !Array.isArray(bb)) return [];
   const bbMap = new Map(bb.map(d => [formatDate(d.date), d.value]));
   return ccc
     .filter(d => bbMap.has(formatDate(d.date)))
@@ -125,6 +206,7 @@ function spreadDiff(ccc, bb) {
 }
 
 function rollingCorrelation(a, b, window = 30) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return [];
   const bMap = new Map(b.map(d => [formatDate(d.date), d.value]));
   const aligned = a.filter(d => bMap.has(formatDate(d.date))).map(d => ({
     date: d.date, va: d.value, vb: bMap.get(formatDate(d.date))
@@ -154,6 +236,7 @@ function rollingChangeCorrelation(a, b, changeWindow = 20, corrWindow = 30) {
 }
 
 function latestWithin(series, targetDate, maxAgeDays) {
+  if (!Array.isArray(series) || !series.length) return null;
   let times = seriesTimeCache.get(series);
   if (!times) {
     times = series.map(point => point.date.getTime());
@@ -205,18 +288,34 @@ function alignSeriesValues(series, targetDates, maxAgeDays) {
 }
 
 function sigma(data, lookbackDays = 252) {
+  const current = last(data);
+  if (!current) return null;
   const recent = data.slice(-lookbackDays);
   const mean = d3.mean(recent, d => d.value);
   const std = d3.deviation(recent, d => d.value);
-  const current = last(data).value;
   // 現在値が直近1年平均から何標準偏差ずれているかを測る。
   // 指標ごとの絶対水準ではなく、「その系列としてどれだけ異常か」を比較するために使う。
-  return std ? (current - mean) / std : 0;
+  return std ? (current.value - mean) / std : 0;
 }
 
 // ═══════════════════════════════════════════
 // CHART HELPERS
 // ═══════════════════════════════════════════
+// 描画に必要なデータが無いチャートを、例外や空のSVGではなく明示的な文言で埋める。
+function renderEmptyState(containerId, message = 'データがありません') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = `<div class="chart-empty">${message}</div>`;
+}
+
+// カード右上のシグナルバッジ。signalがnullならデータなしとして中立表示にする。
+function setCardSignal(id, signal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = signal ? `card-signal ${signal.cls}` : 'card-signal signal-none';
+  el.textContent = signal ? signal.label : '—';
+}
+
 function createSVG(containerId, margin = { top: 10, right: 50, bottom: 30, left: 55 }) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
@@ -320,39 +419,56 @@ function renderAll() {
   renderSpreadChart();
   renderVelocityChart();
   renderEMChart();
-  if (allData.TEDRATE) renderBankStress();
+  renderBankStress();
   renderAlerts();
   updateOverallSignal();
+}
+
+function setMetric(id, text, color = 'var(--text-muted)') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = color;
 }
 
 function renderMetrics() {
   const hy = allData.HY, bb = allData.BB, ccc = allData.CCC, emhy = allData.EMHY;
 
   // US HY OAS
-  const hyVal = last(hy).value;
+  const hyLast = last(hy);
   const hyChg = change20d(hy);
-  // HY全体のOAS水準で市場全体の信用プレミアムをざっくり判定する。
-  // 5%超は警戒域、7%超は信用収縮がかなり進んだ局面として扱う。
-  const hyColor = hyVal > 7 ? 'var(--red)' : hyVal > 5 ? 'var(--yellow)' : 'var(--cyan)';
-  document.getElementById('mHY').textContent = hyVal.toFixed(2) + '%';
-  document.getElementById('mHY').style.color = hyColor;
+  if (hyLast) {
+    // HY全体のOAS水準で市場全体の信用プレミアムをざっくり判定する。
+    // 5%超は警戒域、7%超は信用収縮がかなり進んだ局面として扱う。
+    const hyVal = hyLast.value;
+    const hyColor = hyVal > 7 ? 'var(--red)' : hyVal > 5 ? 'var(--yellow)' : 'var(--cyan)';
+    setMetric('mHY', hyVal.toFixed(2) + '%', hyColor);
+  } else {
+    setMetric('mHY', '—');
+  }
   if (hyChg !== null) {
     const cls = hyChg > 0 ? 'change-up' : 'change-down';
     document.getElementById('mHYchg').className = 'metric-change ' + cls;
     document.getElementById('mHYchg').textContent = `20d: ${hyChg > 0 ? '+' : ''}${hyChg.toFixed(0)}bps`;
+  } else {
+    document.getElementById('mHYchg').className = 'metric-change';
+    document.getElementById('mHYchg').textContent = '20d: —';
   }
 
   // CCC-BB spread
   const diff = spreadDiff(ccc, bb);
-  const spreadVal = last(diff).value;
+  const spreadLast = last(diff);
   const spreadSig = sigma(diff);
-  // CCC-BB差の拡大は「より弱い発行体だけが先に売られている」状態を示しやすい。
-  // 水準そのものよりも、直近1年分布からの乖離度(σ)で異常値判定する。
-  const spreadColor = spreadSig > 2 ? 'var(--red)' : spreadSig > 1 ? 'var(--yellow)' : 'var(--green)';
-  document.getElementById('mSpread').textContent = spreadVal.toFixed(2) + '%';
-  document.getElementById('mSpread').style.color = spreadColor;
-  document.getElementById('mSpreadSigma').textContent = `σ: ${spreadSig.toFixed(2)} (1y)`;
-  document.getElementById('mSpreadSigma').style.color = spreadColor;
+  if (spreadLast && spreadSig !== null) {
+    // CCC-BB差の拡大は「より弱い発行体だけが先に売られている」状態を示しやすい。
+    // 水準そのものよりも、直近1年分布からの乖離度(σ)で異常値判定する。
+    const spreadColor = spreadSig > 2 ? 'var(--red)' : spreadSig > 1 ? 'var(--yellow)' : 'var(--green)';
+    setMetric('mSpread', spreadLast.value.toFixed(2) + '%', spreadColor);
+    setMetric('mSpreadSigma', `σ: ${spreadSig.toFixed(2)} (1y)`, spreadColor);
+  } else {
+    setMetric('mSpread', '—');
+    setMetric('mSpreadSigma', 'σ: — (1y)');
+  }
 
   // CCC/BB velocity ratio
   const cccChg = change20d(ccc);
@@ -365,30 +481,29 @@ function renderMetrics() {
     const r = Math.abs(cccChg / bbChg);
     ratioColor = r > 3 ? 'var(--red)' : r > 2 ? 'var(--yellow)' : 'var(--green)';
   }
-  document.getElementById('mRatio').textContent = ratio;
-  document.getElementById('mRatio').style.color = ratioColor;
+  setMetric('mRatio', ratio, ratioColor);
 
   // US-EM correlation
-  const corrData = rollingChangeCorrelation(hy, emhy, 20, 30);
-  if (corrData.length) {
-    const corrVal = last(corrData).value;
+  const corrLast = last(rollingChangeCorrelation(hy, emhy, 20, 30));
+  if (corrLast) {
+    const corrVal = corrLast.value;
     // 米国HYと新興国HYが同時に強く連動すると、ローカル要因ではなく
     // グローバルなリスクオフで広がっている可能性が高い。
     const corrColor = corrVal > 0.8 ? 'var(--red)' : corrVal > 0.6 ? 'var(--yellow)' : 'var(--green)';
-    document.getElementById('mCorr').textContent = corrVal.toFixed(3);
-    document.getElementById('mCorr').style.color = corrColor;
+    setMetric('mCorr', corrVal.toFixed(3), corrColor);
+  } else {
+    setMetric('mCorr', '—');
   }
 
-  if (allData.TEDRATE) {
-    const { bsi } = getBankStressIndex();
-    if (bsi.length) {
-      const bankScore = 50 + 10 * last(bsi).value;
-      const bankLevel = bankScoreLevel(bankScore);
-      document.getElementById('mBankScore').textContent = bankScore.toFixed(1);
-      document.getElementById('mBankScore').style.color = bankLevel.color;
-      document.getElementById('mBankLevel').textContent = bankLevel.label;
-      document.getElementById('mBankLevel').style.color = bankLevel.color;
-    }
+  const bsiLast = last(getBankStressIndex().bsi);
+  if (bsiLast) {
+    const bankScore = 50 + 10 * bsiLast.value;
+    const bankLevel = bankScoreLevel(bankScore);
+    setMetric('mBankScore', bankScore.toFixed(1), bankLevel.color);
+    setMetric('mBankLevel', bankLevel.label, bankLevel.color);
+  } else {
+    setMetric('mBankScore', '—');
+    setMetric('mBankLevel', '—');
   }
 }
 
@@ -402,10 +517,16 @@ function renderOASChart() {
     `<div class="legend-item"><span class="legend-color" style="background:${COLORS[k]}"></span>${LABELS[k]}</div>`
   ).join('');
 
-  const { g, innerW, innerH } = createSVG('chartOAS');
   const allDates = datasets.flatMap(d => d.data.map(v => v.date));
   const allVals = datasets.flatMap(d => d.data.map(v => v.value));
+  // 期間フィルタ後に1点も残らないとd3.extent/d3.maxがundefinedを返し、
+  // スケールのdomainがNaNになって無音で壊れる。先に空状態へ倒す。
+  if (!allDates.length) {
+    renderEmptyState('chartOAS');
+    return;
+  }
 
+  const { g, innerW, innerH } = createSVG('chartOAS');
   const x = d3.scaleTime().domain(d3.extent(allDates)).range([0, innerW]);
   const y = d3.scaleLinear().domain([0, d3.max(allVals) * 1.1]).range([innerH, 0]);
 
@@ -426,8 +547,8 @@ function renderOASChart() {
 
   addHoverOverlay(g, 'chartOAS', 'tooltipOAS', x, innerW, innerH, datasets, (date) => {
     return keys.map(k => {
-      const d = datasets.find(ds => ds.key === k).data;
-      const closest = d.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
+      const closest = nearest(datasets.find(ds => ds.key === k).data, date);
+      if (!closest) return '';
       return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS[k]}">${LABELS[k]}</span><span>${closest.value.toFixed(2)}%</span></div>`;
     }).join('');
   });
@@ -435,8 +556,13 @@ function renderOASChart() {
 
 function renderSpreadChart() {
   const diff = filterByPeriod(spreadDiff(allData.CCC, allData.BB));
-  const { g, innerW, innerH } = createSVG('chartSpread');
+  if (!diff.length) {
+    renderEmptyState('chartSpread');
+    setCardSignal('spreadSignal', null);
+    return;
+  }
 
+  const { g, innerW, innerH } = createSVG('chartSpread');
   const x = d3.scaleTime().domain(d3.extent(diff, d => d.date)).range([0, innerW]);
   const y = d3.scaleLinear().domain([0, d3.max(diff, d => d.value) * 1.1]).range([innerH, 0]);
 
@@ -473,13 +599,14 @@ function renderSpreadChart() {
 
   // Signal badge
   const sig = sigma(diff);
-  const sigEl = document.getElementById('spreadSignal');
-  if (sig > 2) { sigEl.className = 'card-signal signal-red'; sigEl.textContent = '警戒'; }
-  else if (sig > 1) { sigEl.className = 'card-signal signal-yellow'; sigEl.textContent = '注意'; }
-  else { sigEl.className = 'card-signal signal-green'; sigEl.textContent = '正常'; }
+  if (sig === null) setCardSignal('spreadSignal', null);
+  else if (sig > 2) setCardSignal('spreadSignal', { cls: 'signal-red', label: '警戒' });
+  else if (sig > 1) setCardSignal('spreadSignal', { cls: 'signal-yellow', label: '注意' });
+  else setCardSignal('spreadSignal', { cls: 'signal-green', label: '正常' });
 
   addHoverOverlay(g, 'chartSpread', 'tooltipSpread', x, innerW, innerH, [diff], (date) => {
-    const closest = diff.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
+    const closest = nearest(diff, date);
+    if (!closest) return '';
     return `<div class="tooltip-row"><span class="tooltip-label">CCC−BB</span><span>${closest.value.toFixed(2)}%</span></div>`;
   });
 }
@@ -488,10 +615,15 @@ function renderVelocityChart() {
   const keys = ['HY', 'CCC', 'BB'];
   const datasets = keys.map(k => ({ key: k, data: filterByPeriod(rollingChange(allData[k])) }));
 
-  const { g, innerW, innerH } = createSVG('chartVelocity');
   const allDates = datasets.flatMap(d => d.data.map(v => v.date));
   const allVals = datasets.flatMap(d => d.data.map(v => v.value));
+  if (!allDates.length) {
+    renderEmptyState('chartVelocity');
+    setCardSignal('velocitySignal', null);
+    return;
+  }
 
+  const { g, innerW, innerH } = createSVG('chartVelocity');
   const x = d3.scaleTime().domain(d3.extent(allDates)).range([0, innerW]);
   const yMax = Math.max(d3.max(allVals), 100) * 1.1;
   const yMin = Math.min(d3.min(allVals), -50) * 1.1;
@@ -513,18 +645,17 @@ function renderVelocityChart() {
   });
 
   // Signal
-  const hyVel = last(datasets[0].data)?.value || 0;
-  const velEl = document.getElementById('velocitySignal');
+  const hyVelPoint = last(datasets[0].data);
   // HY OASの20日変化が+100bpsを超えると、短期間のストレス増幅として強い警戒を出す。
-  if (hyVel > 100) { velEl.className = 'card-signal signal-red'; velEl.textContent = '警戒'; }
-  else if (hyVel > 50) { velEl.className = 'card-signal signal-yellow'; velEl.textContent = '注意'; }
-  else { velEl.className = 'card-signal signal-green'; velEl.textContent = '正常'; }
+  if (!hyVelPoint) setCardSignal('velocitySignal', null);
+  else if (hyVelPoint.value > 100) setCardSignal('velocitySignal', { cls: 'signal-red', label: '警戒' });
+  else if (hyVelPoint.value > 50) setCardSignal('velocitySignal', { cls: 'signal-yellow', label: '注意' });
+  else setCardSignal('velocitySignal', { cls: 'signal-green', label: '正常' });
 
   addHoverOverlay(g, 'chartVelocity', 'tooltipVelocity', x, innerW, innerH, datasets, (date) => {
     return keys.map(k => {
-      const d = datasets.find(ds => ds.key === k).data;
-      if (!d.length) return '';
-      const closest = d.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
+      const closest = nearest(datasets.find(ds => ds.key === k).data, date);
+      if (!closest) return '';
       return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS[k]}">${LABELS[k]}</span><span>${closest.value.toFixed(0)}bps</span></div>`;
     }).join('');
   });
@@ -540,10 +671,15 @@ function renderEMChart() {
     `<div class="legend-item"><span class="legend-color" style="background:${COLORS.EMHY}"></span>新興国HY</div>`,
   ].join('');
 
-  const { g, innerW, innerH } = createSVG('chartEM');
   const allDates = [...usData, ...emData].map(d => d.date);
   const allVals = [...usData, ...emData].map(d => d.value);
+  if (!allDates.length) {
+    renderEmptyState('chartEM');
+    setCardSignal('emSignal', null);
+    return;
+  }
 
+  const { g, innerW, innerH } = createSVG('chartEM');
   const x = d3.scaleTime().domain(d3.extent(allDates)).range([0, innerW]);
   const y = d3.scaleLinear().domain([0, d3.max(allVals) * 1.1]).range([innerH, 0]);
 
@@ -555,21 +691,23 @@ function renderEMChart() {
   });
 
   // Signal
-  const corrData = rollingChangeCorrelation(allData.HY, allData.EMHY, 20, 30);
-  const corrVal = corrData.length ? last(corrData).value : 0;
+  const corrPoint = last(rollingChangeCorrelation(allData.HY, allData.EMHY, 20, 30));
+  const corrVal = corrPoint ? corrPoint.value : 0;
   const bothExpanding = change20d(allData.HY) > 0 && change20d(allData.EMHY) > 0;
-  const emEl = document.getElementById('emSignal');
   // 相関が高いだけでなく、両系列とも拡大していることを条件にして
   // 「一緒に悪化している」局面だけを全面警戒にする。
-  if (corrVal > 0.8 && bothExpanding) { emEl.className = 'card-signal signal-red'; emEl.textContent = '全面警戒'; }
-  else if (corrVal > 0.6) { emEl.className = 'card-signal signal-yellow'; emEl.textContent = '注意'; }
-  else { emEl.className = 'card-signal signal-green'; emEl.textContent = '正常'; }
+  if (!corrPoint) setCardSignal('emSignal', null);
+  else if (corrVal > 0.8 && bothExpanding) setCardSignal('emSignal', { cls: 'signal-red', label: '全面警戒' });
+  else if (corrVal > 0.6) setCardSignal('emSignal', { cls: 'signal-yellow', label: '注意' });
+  else setCardSignal('emSignal', { cls: 'signal-green', label: '正常' });
 
   addHoverOverlay(g, 'chartEM', 'tooltipEM', x, innerW, innerH, [], (date) => {
-    const closestUS = usData.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
-    const closestEM = emData.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
-    return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.HY}">米国HY</span><span>${closestUS.value.toFixed(2)}%</span></div>` +
-      `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.EMHY}">新興国HY</span><span>${closestEM.value.toFixed(2)}%</span></div>`;
+    const closestUS = nearest(usData, date);
+    const closestEM = nearest(emData, date);
+    const rows = [];
+    if (closestUS) rows.push(`<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.HY}">米国HY</span><span>${closestUS.value.toFixed(2)}%</span></div>`);
+    if (closestEM) rows.push(`<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.EMHY}">新興国HY</span><span>${closestEM.value.toFixed(2)}%</span></div>`);
+    return rows.join('');
   });
 }
 
@@ -577,6 +715,7 @@ function renderEMChart() {
 // BANK STRESS INDEX
 // ═══════════════════════════════════════════
 function computeCPSpread(cp3m, dtb3) {
+  if (!Array.isArray(cp3m) || !Array.isArray(dtb3)) return [];
   const dtb3Map = new Map(dtb3.map(d => [formatDate(d.date), d.value]));
   return cp3m
     .filter(d => dtb3Map.has(formatDate(d.date)))
@@ -584,6 +723,7 @@ function computeCPSpread(cp3m, dtb3) {
 }
 
 function zscoreArray(data) {
+  if (!Array.isArray(data)) return [];
   const result = [];
   let count = 0;
   let sum = 0;
@@ -665,31 +805,35 @@ function bankScoreLevel(score) {
 
 function renderBankStress() {
   const { bsi } = getBankStressIndex();
-  if (!bsi.length) return;
+  const latest = last(bsi);
+  if (!latest) {
+    // 構成系列が1本以下しか無い場合はBSI自体が作れない。
+    document.getElementById('bcSOFR').textContent = '—';
+    document.getElementById('bcSTLFSI').textContent = '—';
+    setCardSignal('bankSignal', null);
+    renderEmptyState('chartBank');
+    return;
+  }
 
-  const currentBSI = last(bsi).value;
-  const score = 50 + 10 * currentBSI;
+  const score = 50 + 10 * latest.value;
   const level = bankScoreLevel(score);
 
-  document.getElementById('mBankScore').textContent = score.toFixed(1);
-  document.getElementById('mBankScore').style.color = level.color;
-  document.getElementById('mBankLevel').textContent = level.label;
-  document.getElementById('mBankLevel').style.color = level.color;
+  setMetric('mBankScore', score.toFixed(1), level.color);
+  setMetric('mBankLevel', level.label, level.color);
+  setCardSignal('bankSignal', level);
 
-  const sigEl = document.getElementById('bankSignal');
-  sigEl.className = 'card-signal ' + level.cls;
-  sigEl.textContent = level.label;
-
-  const latestDate = last(bsi).date;
-  const sofrPoint = latestWithin(allData.SOFR, latestDate, 10);
-  const stlfsiPoint = latestWithin(allData.STLFSI, latestDate, 10);
+  const sofrPoint = latestWithin(allData.SOFR, latest.date, 10);
+  const stlfsiPoint = latestWithin(allData.STLFSI, latest.date, 10);
   document.getElementById('bcSOFR').textContent = sofrPoint ? sofrPoint.value.toFixed(2) : '—';
   document.getElementById('bcSTLFSI').textContent = stlfsiPoint ? stlfsiPoint.value.toFixed(2) : '—';
 
-  const filtered = filterByPeriod(bsi);
-  const scoreData = filtered.map(d => ({ date: d.date, value: 50 + 10 * d.value }));
-  const { g, innerW, innerH } = createSVG('chartBank');
+  const scoreData = filterByPeriod(bsi).map(d => ({ date: d.date, value: 50 + 10 * d.value }));
+  if (!scoreData.length) {
+    renderEmptyState('chartBank', '選択期間にデータがありません');
+    return;
+  }
 
+  const { g, innerW, innerH } = createSVG('chartBank');
   const x = d3.scaleTime().domain(d3.extent(scoreData, d => d.date)).range([0, innerW]);
   const yMin = Math.min(d3.min(scoreData, d => d.value), 30);
   const yMax = Math.max(d3.max(scoreData, d => d.value), 70);
@@ -721,7 +865,8 @@ function renderBankStress() {
     .attr('d', line);
 
   addHoverOverlay(g, 'chartBank', 'tooltipBank', x, innerW, innerH, [scoreData], (date) => {
-    const closest = scoreData.reduce((a, b) => Math.abs(b.date - date) < Math.abs(a.date - date) ? b : a);
+    const closest = nearest(scoreData, date);
+    if (!closest) return '';
     const lvl = bankScoreLevel(closest.value);
     return `<div class="tooltip-row"><span class="tooltip-label" style="color:${COLORS.BANK}">Score</span><span>${closest.value.toFixed(1)}</span></div>` +
       `<div class="tooltip-row"><span class="tooltip-label">判定</span><span style="color:${lvl.color}">${lvl.label}</span></div>`;
@@ -731,26 +876,31 @@ function renderBankStress() {
 function renderAlerts() {
   const alerts = [];
   const hy = allData.HY, bb = allData.BB, ccc = allData.CCC, emhy = allData.EMHY;
-  const hyVal = last(hy).value;
+  const hyLast = last(hy);
   const hyChg = change20d(hy);
   const diff = spreadDiff(ccc, bb);
   const spreadSig = sigma(diff);
   const cccChg = change20d(ccc);
   const bbChg = change20d(bb);
-  const corrData = rollingChangeCorrelation(hy, emhy, 20, 30);
-  const corrVal = corrData.length ? last(corrData).value : 0;
+  const corrPoint = last(rollingChangeCorrelation(hy, emhy, 20, 30));
+  const corrVal = corrPoint ? corrPoint.value : 0;
 
-  if (hyVal > 7) alerts.push({ level: 'danger', msg: `US HY OAS ${hyVal.toFixed(2)}% — 700bps超、信用収縮ゾーン` });
-  else if (hyVal > 5) alerts.push({ level: 'warn', msg: `US HY OAS ${hyVal.toFixed(2)}% — 500bps超、警戒ゾーン` });
-  else alerts.push({ level: 'ok', msg: `US HY OAS ${hyVal.toFixed(2)}% — 平常レンジ` });
+  if (!hyLast) {
+    alerts.push({ level: 'danger', msg: 'US HY OASのデータが取得できていません' });
+  } else {
+    const hyVal = hyLast.value;
+    if (hyVal > 7) alerts.push({ level: 'danger', msg: `US HY OAS ${hyVal.toFixed(2)}% — 700bps超、信用収縮ゾーン` });
+    else if (hyVal > 5) alerts.push({ level: 'warn', msg: `US HY OAS ${hyVal.toFixed(2)}% — 500bps超、警戒ゾーン` });
+    else alerts.push({ level: 'ok', msg: `US HY OAS ${hyVal.toFixed(2)}% — 平常レンジ` });
+  }
 
   // 水準だけでなくスピードも見る。短期急拡大はイベントドリブンな悪化を示しやすい。
   if (hyChg !== null && hyChg > 100) alerts.push({ level: 'danger', msg: `20日変化 +${hyChg.toFixed(0)}bps — 急速な拡大` });
   else if (hyChg !== null && hyChg > 50) alerts.push({ level: 'warn', msg: `20日変化 +${hyChg.toFixed(0)}bps — 拡大傾向` });
 
   // CCC-BB差のσ判定で、信用市場の中で弱い銘柄だけが先に崩れる兆候を拾う。
-  if (spreadSig > 2) alerts.push({ level: 'danger', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 質への逃避が加速` });
-  else if (spreadSig > 1) alerts.push({ level: 'warn', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 信用差別化の兆候` });
+  if (spreadSig !== null && spreadSig > 2) alerts.push({ level: 'danger', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 質への逃避が加速` });
+  else if (spreadSig !== null && spreadSig > 1) alerts.push({ level: 'warn', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 信用差別化の兆候` });
 
   if (cccChg !== null && bbChg !== null && bbChg !== 0 && Math.abs(cccChg / bbChg) > 3) {
     alerts.push({ level: 'danger', msg: `CCC/BB変化率比 ${(cccChg / bbChg).toFixed(1)}x — パニック初期段階の可能性` });
@@ -760,15 +910,13 @@ function renderAlerts() {
     alerts.push({ level: 'danger', msg: `US-EM相関 ${corrVal.toFixed(3)} かつ両方拡大中 — システミックリスク` });
   }
 
-  if (allData.TEDRATE) {
-    const { bsi } = getBankStressIndex();
-    if (bsi.length) {
-      const bankScore = 50 + 10 * last(bsi).value;
-      if (bankScore >= 65) alerts.push({ level: 'danger', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 危機水準` });
-      else if (bankScore >= 55) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 警戒水準` });
-      else if (bankScore >= 45) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 注意水準` });
-      else alerts.push({ level: 'ok', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 正常` });
-    }
+  const bsiLast = last(getBankStressIndex().bsi);
+  if (bsiLast) {
+    const bankScore = 50 + 10 * bsiLast.value;
+    if (bankScore >= 65) alerts.push({ level: 'danger', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 危機水準` });
+    else if (bankScore >= 55) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 警戒水準` });
+    else if (bankScore >= 45) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 注意水準` });
+    else alerts.push({ level: 'ok', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 正常` });
   }
 
   if (!alerts.some(a => a.level === 'danger' || a.level === 'warn')) {
@@ -785,26 +933,30 @@ function renderAlerts() {
 
 function updateOverallSignal() {
   const hy = allData.HY;
-  const hyVal = last(hy).value;
+  const hyLast = last(hy);
   const hyChg = change20d(hy);
-  const diff = spreadDiff(allData.CCC, allData.BB);
-  const spreadSig = sigma(diff);
+  const spreadSig = sigma(spreadDiff(allData.CCC, allData.BB));
+
+  const el = document.getElementById('overallSignal');
+  if (!hyLast) {
+    el.className = 'overall-signal signal-none';
+    document.getElementById('overallDot').className = 'signal-dot dot-none';
+    document.getElementById('overallLabel').textContent = 'データなし';
+    return;
+  }
 
   let level = 'green';
   let label = '安定';
-  let bankScore = 0;
 
-  if (allData.TEDRATE) {
-    const { bsi } = getBankStressIndex();
-    if (bsi.length) bankScore = 50 + 10 * last(bsi).value;
-  }
+  const bsiLast = last(getBankStressIndex().bsi);
+  const bankScore = bsiLast ? 50 + 10 * bsiLast.value : 0;
+  const hyVal = hyLast.value;
 
   // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差、銀行ストレスの
   // どれかが閾値を超えたら段階的に色を引き上げる設計にしている。
   if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1 || bankScore >= 45) { level = 'yellow'; label = '注意'; }
   if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2 || bankScore >= 65) { level = 'red'; label = '警戒'; }
 
-  const el = document.getElementById('overallSignal');
   el.className = `overall-signal signal-${level}`;
   document.getElementById('overallDot').className = `signal-dot dot-${level}`;
   document.getElementById('overallLabel').textContent = label;

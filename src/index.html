@@ -128,6 +128,8 @@
   .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
   .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
   .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
+  /* データが無く判定できない状態。市場が正常であることと区別する。 */
+  .signal-none { background: rgba(148,163,184,0.08); color: var(--text-muted); border: 1px solid var(--border); }
 
   @keyframes pulse-red {
     0%, 100% { box-shadow: 0 0 0 0 rgba(229,77,77,0.25); }
@@ -148,6 +150,7 @@
   .dot-green { background: var(--green); }
   .dot-yellow { background: var(--yellow); }
   .dot-red { background: var(--red); }
+  .dot-none { background: var(--text-muted); }
 
   /* ═══════════════════════════════════════════
      LAYOUT
@@ -261,6 +264,18 @@
 
   .chart-container-tall {
     height: 300px;
+  }
+
+  /* データが無いチャートのプレースホルダー。空のSVGを出さず理由を明示する。 */
+  .chart-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-family: var(--font-sans);
   }
 
   svg text {
