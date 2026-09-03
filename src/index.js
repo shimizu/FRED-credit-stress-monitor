@@ -29,7 +29,7 @@ const LABELS = {
 // fred.jsonに含まれるべき系列。欠けていても描画は続行し、空配列で埋める。
 const SERIES_KEYS = ['HY', 'BB', 'B', 'CCC', 'EMHY', 'TEDRATE', 'CP3M', 'DTB3', 'SOFR', 'STLFSI'];
 
-// これらが欠けるとメトリクス・アラート・総合シグナルが成立しないため、
+// これらが欠けるとメトリクス・アラートが成立しないため、
 // 揃っていない場合は描画せずエラー表示へ倒す。
 const REQUIRED_SERIES = ['HY', 'BB', 'CCC', 'EMHY'];
 
@@ -43,16 +43,6 @@ const seriesTimeCache = new WeakMap();
 const parseDate = d3.timeParse('%Y-%m-%d');
 const formatDate = d3.timeFormat('%Y-%m-%d');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-// ═══════════════════════════════════════════
-// CLOCK
-// ═══════════════════════════════════════════
-function updateClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent = now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
-}
-setInterval(updateClock, 1000);
-updateClock();
 
 // ═══════════════════════════════════════════
 // DATA LOADING
@@ -101,7 +91,6 @@ function showDataError(message) {
   console.error('データ読み込みエラー:', message);
   const logEl = document.getElementById('alertLog');
   logEl.innerHTML = `<div class="alert-item"><span class="alert-level alert-danger">エラー</span><span class="alert-msg">${message}</span></div>`;
-  document.getElementById('overallLabel').textContent = 'ERROR';
   ['chartOAS', 'chartSpread', 'chartVelocity', 'chartEM', 'chartBank']
     .forEach(id => renderEmptyState(id, 'データを表示できません'));
 }
@@ -421,7 +410,6 @@ function renderAll() {
   renderEMChart();
   renderBankStress();
   renderAlerts();
-  updateOverallSignal();
 }
 
 function setMetric(id, text, color = 'var(--text-muted)') {
@@ -926,40 +914,9 @@ function renderAlerts() {
   const logEl = document.getElementById('alertLog');
   logEl.innerHTML = alerts.map(a => {
     const cls = a.level === 'danger' ? 'alert-danger' : a.level === 'warn' ? 'alert-warn' : 'alert-ok';
-    const label = a.level === 'danger' ? '警戒' : a.level === 'warn' ? '注意' : '正常';
+    const label = a.level === 'danger' ? '異常' : a.level === 'warn' ? '注意' : '通常';
     return `<div class="alert-item"><span class="alert-level ${cls}">${label}</span><span class="alert-msg">${a.msg}</span></div>`;
   }).join('');
-}
-
-function updateOverallSignal() {
-  const hy = allData.HY;
-  const hyLast = last(hy);
-  const hyChg = change20d(hy);
-  const spreadSig = sigma(spreadDiff(allData.CCC, allData.BB));
-
-  const el = document.getElementById('overallSignal');
-  if (!hyLast) {
-    el.className = 'overall-signal signal-none';
-    document.getElementById('overallDot').className = 'signal-dot dot-none';
-    document.getElementById('overallLabel').textContent = 'データなし';
-    return;
-  }
-
-  let level = 'green';
-  let label = '安定';
-
-  const bsiLast = last(getBankStressIndex().bsi);
-  const bankScore = bsiLast ? 50 + 10 * bsiLast.value : 0;
-  const hyVal = hyLast.value;
-
-  // 総合判定は複数指標のOR条件。HY全体、悪化速度、低格付け差、銀行ストレスの
-  // どれかが閾値を超えたら段階的に色を引き上げる設計にしている。
-  if (hyVal > 5 || (hyChg && hyChg > 50) || spreadSig > 1 || bankScore >= 45) { level = 'yellow'; label = '注意'; }
-  if (hyVal > 7 || (hyChg && hyChg > 100) || spreadSig > 2 || bankScore >= 65) { level = 'red'; label = '警戒'; }
-
-  el.className = `overall-signal signal-${level}`;
-  document.getElementById('overallDot').className = `signal-dot dot-${level}`;
-  document.getElementById('overallLabel').textContent = label;
 }
 
 // ═══════════════════════════════════════════
@@ -973,8 +930,7 @@ const GUIDES = {
     body: `
       <p><strong>「世の中のお金の貸し借りがヤバくなりそうかどうか」を監視する画面</strong>です。経済危機の前には「お金を貸している人たちの不安」が先に数字へ表れます。それをリアルタイムで可視化しています。</p>
       <p><strong>スプレッドとは</strong>：信用が低い企業の金利と、最も安全な金利（米国債）の差。スプレッドの拡大は「お金を貸すのが怖い」と感じる人が増えていることを意味します。</p>
-      <p><strong>アラートログ</strong>：すべての指標を自動判定し、<span style="color:var(--green)">正常</span> / <span style="color:var(--yellow)">注意</span> / <span style="color:var(--red)">警戒</span> の3段階で表示します。</p>
-      <div class="guide-note">右上の総合バッジの判定にはHY水準・20日変化・CCC-BBスプレッド差・銀行Scoreの4つだけが使われ、CCC/BB変化率比とUS-EM相関は含まれません。アラートログに赤い「警戒」があってもバッジが「安定」になる場合があります（既知の問題として修正予定）。バッジだけでなくアラートログも確認してください。</div>
+      <p><strong>アラートログ</strong>：すべての指標を自動判定し、<span style="color:var(--green)">通常</span> / <span style="color:var(--yellow)">注意</span> / <span style="color:var(--red)">異常</span> の3段階で表示します。</p>
     `
   },
   oas: {

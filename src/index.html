@@ -113,18 +113,6 @@
   /* ═══════════════════════════════════════════
      SIGNAL BADGES
      ═══════════════════════════════════════════ */
-  .overall-signal {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: 6px var(--space-md);
-    border-radius: var(--radius-md);
-    font-family: var(--font-mono);
-    font-size: var(--text-base);
-    font-weight: 600;
-    letter-spacing: 1px;
-  }
-
   .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
   .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
   .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
@@ -139,18 +127,6 @@
   @media (prefers-reduced-motion: reduce) {
     .signal-red { animation: none; }
   }
-
-  .signal-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  .dot-green { background: var(--green); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-red { background: var(--red); }
-  .dot-none { background: var(--text-muted); }
 
   /* ═══════════════════════════════════════════
      LAYOUT
@@ -667,11 +643,6 @@
   </div>
   <div class="header-right">
     <span class="status-time" id="lastUpdate"></span>
-    <time class="status-time" id="clock"></time>
-    <div class="overall-signal signal-green" id="overallSignal" role="status" aria-live="polite">
-      <span class="signal-dot dot-green" id="overallDot" aria-hidden="true"></span>
-      <span id="overallLabel">LOADING</span>
-    </div>
     <button class="help-btn" data-guide="overview" aria-haspopup="dialog" aria-label="ダッシュボードの読み方を表示">?</button>
   </div>
 </header>

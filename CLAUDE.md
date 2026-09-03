@@ -45,7 +45,7 @@ FRED APIを使った信用市場ストレスモニターダッシュボード（
 1. GitHub Actions（毎日UTC 22:00）が`scripts/fetch-fred.js`を実行し、FRED APIから全シリーズを取得して`public/data/fred.json`へ書き出す
 2. 差分があれば`chore: FREDデータを更新`でコミット・プッシュし、ビルドしてGitHub Pagesへデプロイ
 3. ページロード時に`startFetch()`が`./data/fred.json`をfetchし、日付文字列を`Date`へパースしてグローバル変数`allData`へ格納
-4. `renderAll()`が全メトリクス・チャート・アラート・総合シグナルを一括再描画
+4. `renderAll()`が全メトリクス・チャート・アラートを一括再描画
 
 期間ボタン（1年/3年/5年/全期間）と`resize`イベントも`renderAll()`を再実行する。銀行ストレス指数だけは`bankStressCache`にキャッシュされ、データ再読み込み時にクリアされる。
 
@@ -91,7 +91,7 @@ TED Spread、CP Spread、SOFR、St. Louis FSIの4系列をZスコア化し、日
 - **CCC/BB変化率比**: 絶対値>2=WARN, >3=ALERT
 - **銀行ストレスScore**: >=45=注意, >=55=警戒, >=65=危機
 
-総合シグナル（`updateOverallSignal()`）はHY水準・20日変化・CCC-BBのσ・銀行ScoreのOR条件で判定する。CCC/BB変化率比とUS-EM相関は`renderAlerts()`でのみ判定され総合シグナルには含まれないため、アラートログに「警戒」があっても総合表示が「安定」になる場合がある。
+ヘッダ右上の総合シグナルバッジは、一部の指標しか判定に含まれず誤解を招くため廃止した。全指標の判定は`renderAlerts()`によるアラートログに一本化されている。
 
 ## 言語・コミット規約
 - コミットメッセージ・コメント・ドキュメントは日本語で記述
