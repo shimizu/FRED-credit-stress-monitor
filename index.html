@@ -113,18 +113,6 @@
   /* ═══════════════════════════════════════════
      SIGNAL BADGES
      ═══════════════════════════════════════════ */
-  .overall-signal {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: 6px var(--space-md);
-    border-radius: var(--radius-md);
-    font-family: var(--font-mono);
-    font-size: var(--text-base);
-    font-weight: 600;
-    letter-spacing: 1px;
-  }
-
   .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
   .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
   .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
@@ -139,18 +127,6 @@
   @media (prefers-reduced-motion: reduce) {
     .signal-red { animation: none; }
   }
-
-  .signal-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  .dot-green { background: var(--green); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-red { background: var(--red); }
-  .dot-none { background: var(--text-muted); }
 
   /* ═══════════════════════════════════════════
      LAYOUT
@@ -655,7 +631,7 @@
     outline-offset: 2px;
   }
 </style>
-  <script type="module" crossorigin src="./assets/index-BenkS_7Q.js"></script>
+  <script type="module" crossorigin src="./assets/index-BFoBEq_9.js"></script>
   <script type="module">import'data:text/javascript,if(!import.meta.resolve)throw Error("import.meta.resolve not supported")';import.meta.url;import("_").catch(()=>1);(async function*(){})().next();window.__vite_is_modern_browser=true</script>
   <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
 </head>
@@ -670,11 +646,6 @@
   </div>
   <div class="header-right">
     <span class="status-time" id="lastUpdate"></span>
-    <time class="status-time" id="clock"></time>
-    <div class="overall-signal signal-green" id="overallSignal" role="status" aria-live="polite">
-      <span class="signal-dot dot-green" id="overallDot" aria-hidden="true"></span>
-      <span id="overallLabel">LOADING</span>
-    </div>
     <button class="help-btn" data-guide="overview" aria-haspopup="dialog" aria-label="ダッシュボードの読み方を表示">?</button>
   </div>
 </header>
@@ -819,6 +790,6 @@
 
   <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
   <script nomodule crossorigin id="vite-legacy-polyfill" src="./assets/polyfills-legacy-DgwWR7Ee.js"></script>
-  <script nomodule crossorigin id="vite-legacy-entry" data-src="./assets/index-legacy-ClQr4Xsg.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+  <script nomodule crossorigin id="vite-legacy-entry" data-src="./assets/index-legacy-BbqUYYba.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
 </body>
 </html>
