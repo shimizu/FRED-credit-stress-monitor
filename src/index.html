@@ -115,6 +115,7 @@
      ═══════════════════════════════════════════ */
   .signal-green { background: rgba(52,210,123,0.10); color: var(--green); border: 1px solid rgba(52,210,123,0.22); }
   .signal-yellow { background: rgba(229,168,22,0.10); color: var(--yellow); border: 1px solid rgba(229,168,22,0.22); }
+  .signal-orange { background: rgba(232,133,58,0.10); color: var(--orange); border: 1px solid rgba(232,133,58,0.22); }
   .signal-red { background: rgba(229,77,77,0.10); color: var(--red); border: 1px solid rgba(229,77,77,0.22); animation: pulse-red 2s infinite; }
   /* データが無く判定できない状態。市場が正常であることと区別する。 */
   .signal-none { background: rgba(148,163,184,0.08); color: var(--text-muted); border: 1px solid var(--border); }
@@ -424,6 +425,7 @@
   }
 
   .alert-warn { background: rgba(229,168,22,0.12); color: var(--yellow); }
+  .alert-caution { background: rgba(232,133,58,0.12); color: var(--orange); }
   .alert-danger { background: rgba(229,77,77,0.12); color: var(--red); }
   .alert-ok { background: rgba(52,210,123,0.08); color: var(--green); }
 
@@ -661,7 +663,7 @@
 
   <!-- Metrics -->
   <div class="metrics-row" id="metricsRow">
-    <div class="metric-card" title="HY債全体のスプレッド。5%超で注意、7%超で警戒。">
+    <div class="metric-card" title="HY債全体のスプレッド。5%超で注意、7%超で異常。">
       <button class="help-btn" data-guide="oas" aria-haspopup="dialog" aria-label="米国HY OASの解説を表示">?</button>
       <div class="metric-label">米国HY OAS</div>
       <div class="metric-value" id="mHY" style="color:var(--text-muted)">—</div>
@@ -669,7 +671,7 @@
         <span class="metric-change" id="mHYchg">20日変化: —</span>
       </div>
     </div>
-    <div class="metric-card" title="低格付け債の選別売り度合い。1σ超で注意、2σ超で警戒。">
+    <div class="metric-card" title="低格付け債の選別売り度合い。過去1年比の乖離で判定。1σ超で上振れ、2σ超で大きく上振れ、3σ超で極端。">
       <button class="help-btn" data-guide="spread" aria-haspopup="dialog" aria-label="CCC-BBスプレッド差の解説を表示">?</button>
       <div class="metric-label">CCC-BBスプレッド差</div>
       <div class="metric-value" id="mSpread" style="color:var(--text-muted)">—</div>
@@ -682,7 +684,7 @@
       <div class="metric-label">CCC / BB 変化率比</div>
       <div class="metric-value" id="mRatio" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
-        <span id="mRatioLabel" style="color:var(--text-muted)">— 警戒: &gt;3.0x</span>
+        <span id="mRatioLabel" style="color:var(--text-muted)">— 異常: &gt;3.0x</span>
       </div>
     </div>
     <div class="metric-card" title="米国・新興国HYの連動性。0.8超かつ両方拡大時はシステミックリスク。">
@@ -690,10 +692,10 @@
       <div class="metric-label">米国-新興国 相関（30日）</div>
       <div class="metric-value" id="mCorr" style="color:var(--text-muted)">—</div>
       <div class="metric-detail">
-        <span id="mCorrLabel" style="color:var(--text-muted)">— 警戒: &gt;0.8</span>
+        <span id="mCorrLabel" style="color:var(--text-muted)">— 異常: &gt;0.8</span>
       </div>
     </div>
-    <div class="metric-card" title="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。">
+    <div class="metric-card" title="銀行ストレス指数。過去平均からの乖離で判定。60(+1σ)超で上振れ、70(+2σ)超で大きく上振れ、80(+3σ)超で極端。">
       <button class="help-btn" data-guide="bank" aria-haspopup="dialog" aria-label="銀行ストレスScoreの解説を表示">?</button>
       <div class="metric-label">銀行ストレス Score</div>
       <div class="metric-value" id="mBankScore" style="color:var(--text-muted)">—</div>
@@ -715,9 +717,9 @@
       </div>
     </div>
     <div class="legend" id="legendMain"></div>
-    <div class="chart-container chart-container-tall" id="chartOAS" role="img" aria-label="ICE BofA指数に基づく格付け別OASの推移。5%超で警戒、7%超で信用収縮ゾーン。"></div>
+    <div class="chart-container chart-container-tall" id="chartOAS" role="img" aria-label="ICE BofA指数に基づく格付け別OASの推移。5%超で注意、7%超で異常（信用収縮ゾーン）。"></div>
     <div class="tooltip" id="tooltipOAS"></div>
-    <div class="chart-desc">ICE BofA指数に基づく格付け別OASの推移。5%超で警戒、7%超で信用収縮ゾーン。</div>
+    <div class="chart-desc">ICE BofA指数に基づく格付け別OASの推移。5%超で注意、7%超で異常（信用収縮ゾーン）。</div>
   </div>
 
   <!-- Chart 2: CCC-BB spread diff -->
@@ -726,9 +728,9 @@
       <span class="card-title-text">CCC − BB スプレッド差<button class="help-btn" data-guide="spread" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="spreadSignal"></span>
     </div>
-    <div class="chart-container" id="chartSpread" role="img" aria-label="CCC-BBスプレッド差。μ+2σ超で警戒。"></div>
+    <div class="chart-container" id="chartSpread" role="img" aria-label="CCC-BBスプレッド差。μ+2σ超で大きく上振れ。"></div>
     <div class="tooltip" id="tooltipSpread"></div>
-    <div class="chart-desc">CCC格とBB格のスプレッド差。拡大は低格付け債への選別売り（質への逃避）を示唆。μ+2σ超で警戒。</div>
+    <div class="chart-desc">CCC格とBB格のスプレッド差。拡大は低格付け債への選別売り（質への逃避）を示唆。過去1年比の乖離で判定し、μ+2σ超で大きく上振れ。</div>
   </div>
 
   <!-- Chart 3: 20d rate of change -->
@@ -737,7 +739,7 @@
       <span class="card-title-text">20日変化幅（bps）<button class="help-btn" data-guide="velocity" aria-haspopup="dialog" aria-label="このチャートの解説を表示">?</button></span>
       <span class="card-signal" id="velocitySignal"></span>
     </div>
-    <div class="chart-container" id="chartVelocity" role="img" aria-label="直近20営業日のスプレッド変化幅。+100bps超で警戒。"></div>
+    <div class="chart-container" id="chartVelocity" role="img" aria-label="直近20営業日のスプレッド変化幅。+100bps超で異常。"></div>
     <div class="tooltip" id="tooltipVelocity"></div>
     <div class="chart-desc">直近20営業日のスプレッド変化幅（bps）。+100bps超の急拡大は市場ストレスの兆候。</div>
   </div>
@@ -769,9 +771,9 @@
         <span class="bank-comp-value" id="bcSTLFSI">—</span>
       </div>
     </div>
-    <div class="chart-container" id="chartBank" role="img" aria-label="銀行ストレス指数。45未満:正常、45-55:注意、55-65:警戒、65超:危機。"></div>
+    <div class="chart-container" id="chartBank" role="img" aria-label="銀行ストレス指数。過去平均からの乖離で判定。60(+1σ)超で上振れ、70(+2σ)超で大きく上振れ、80(+3σ)超で極端。"></div>
     <div class="tooltip" id="tooltipBank"></div>
-    <div class="chart-desc">SOFR・St.Louis FSIを中心に銀行・資金市場ストレスを集約。Score=50+10×BSI。45未満:正常、45-55:注意、55-65:警戒、65超:危機。</div>
+    <div class="chart-desc">SOFR・St.Louis FSIを中心に銀行・資金市場ストレスを集約。Score=50+10×BSI（50=過去平均、10ポイント=1σ）。60(+1σ)超で上振れ、70(+2σ)超で大きく上振れ、80(+3σ)超で極端。</div>
   </div>
 
 </main>

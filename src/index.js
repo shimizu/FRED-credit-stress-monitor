@@ -427,7 +427,7 @@ function renderMetrics() {
   const hyChg = change20d(hy);
   if (hyLast) {
     // HY全体のOAS水準で市場全体の信用プレミアムをざっくり判定する。
-    // 5%超は警戒域、7%超は信用収縮がかなり進んだ局面として扱う。
+    // 5%超は注意域、7%超は信用収縮がかなり進んだ局面として扱う。
     const hyVal = hyLast.value;
     const hyColor = hyVal > 7 ? 'var(--red)' : hyVal > 5 ? 'var(--yellow)' : 'var(--cyan)';
     setMetric('mHY', hyVal.toFixed(2) + '%', hyColor);
@@ -450,7 +450,7 @@ function renderMetrics() {
   if (spreadLast && spreadSig !== null) {
     // CCC-BB差の拡大は「より弱い発行体だけが先に売られている」状態を示しやすい。
     // 水準そのものよりも、直近1年分布からの乖離度(σ)で異常値判定する。
-    const spreadColor = spreadSig > 2 ? 'var(--red)' : spreadSig > 1 ? 'var(--yellow)' : 'var(--green)';
+    const spreadColor = sigmaLevel(spreadSig).color;
     setMetric('mSpread', spreadLast.value.toFixed(2) + '%', spreadColor);
     setMetric('mSpreadSigma', `σ: ${spreadSig.toFixed(2)} (1y)`, spreadColor);
   } else {
@@ -520,7 +520,7 @@ function renderOASChart() {
 
   addAxes(g, x, y, innerW, innerH);
   addThresholdLine(g, y, innerW, 5, '注意', 'var(--yellow)');
-  addThresholdLine(g, y, innerW, 7, '警戒', 'var(--red)');
+  addThresholdLine(g, y, innerW, 7, '異常', 'var(--red)');
 
   datasets.forEach(({ key, data }) => {
     const line = d3.line().x(d => x(d.date)).y(d => y(d.value)).curve(d3.curveMonotoneX);
@@ -588,9 +588,7 @@ function renderSpreadChart() {
   // Signal badge
   const sig = sigma(diff);
   if (sig === null) setCardSignal('spreadSignal', null);
-  else if (sig > 2) setCardSignal('spreadSignal', { cls: 'signal-red', label: '警戒' });
-  else if (sig > 1) setCardSignal('spreadSignal', { cls: 'signal-yellow', label: '注意' });
-  else setCardSignal('spreadSignal', { cls: 'signal-green', label: '正常' });
+  else setCardSignal('spreadSignal', sigmaLevel(sig));
 
   addHoverOverlay(g, 'chartSpread', 'tooltipSpread', x, innerW, innerH, [diff], (date) => {
     const closest = nearest(diff, date);
@@ -634,9 +632,9 @@ function renderVelocityChart() {
 
   // Signal
   const hyVelPoint = last(datasets[0].data);
-  // HY OASの20日変化が+100bpsを超えると、短期間のストレス増幅として強い警戒を出す。
+  // HY OASの20日変化が+100bpsを超えると、短期間のストレス増幅として最上位の判定を出す。
   if (!hyVelPoint) setCardSignal('velocitySignal', null);
-  else if (hyVelPoint.value > 100) setCardSignal('velocitySignal', { cls: 'signal-red', label: '警戒' });
+  else if (hyVelPoint.value > 100) setCardSignal('velocitySignal', { cls: 'signal-red', label: '異常' });
   else if (hyVelPoint.value > 50) setCardSignal('velocitySignal', { cls: 'signal-yellow', label: '注意' });
   else setCardSignal('velocitySignal', { cls: 'signal-green', label: '正常' });
 
@@ -683,9 +681,9 @@ function renderEMChart() {
   const corrVal = corrPoint ? corrPoint.value : 0;
   const bothExpanding = change20d(allData.HY) > 0 && change20d(allData.EMHY) > 0;
   // 相関が高いだけでなく、両系列とも拡大していることを条件にして
-  // 「一緒に悪化している」局面だけを全面警戒にする。
+  // 「一緒に悪化している」局面だけを最上位の判定にする。
   if (!corrPoint) setCardSignal('emSignal', null);
-  else if (corrVal > 0.8 && bothExpanding) setCardSignal('emSignal', { cls: 'signal-red', label: '全面警戒' });
+  else if (corrVal > 0.8 && bothExpanding) setCardSignal('emSignal', { cls: 'signal-red', label: '異常' });
   else if (corrVal > 0.6) setCardSignal('emSignal', { cls: 'signal-yellow', label: '注意' });
   else setCardSignal('emSignal', { cls: 'signal-green', label: '正常' });
 
@@ -784,11 +782,19 @@ function getBankStressIndex() {
   return bankStressCache;
 }
 
+// 乖離系指標（Zスコア・σ）の判定。これらは過去分布からのズレしか表さず、
+// 水準としての危険度は語れないため、「警戒」「危機」のような危険度の語は使わない。
+function sigmaLevel(sig) {
+  if (sig > 3) return { label: '極端', desc: '極端に上振れ', level: 'danger', color: 'var(--red)', cls: 'signal-red' };
+  if (sig > 2) return { label: '大きく上振れ', desc: '大きく上振れ', level: 'caution', color: 'var(--orange)', cls: 'signal-orange' };
+  if (sig > 1) return { label: '上振れ', desc: '上振れ', level: 'warn', color: 'var(--yellow)', cls: 'signal-yellow' };
+  return { label: '平常域', desc: '平常域', level: 'ok', color: 'var(--green)', cls: 'signal-green' };
+}
+
+// Score = 50 + 10 × BSI（BSIは構成指標のZスコア平均）なので、
+// 50が過去平均、10ポイントが1σに相当する。判定もσ基準に揃える。
 function bankScoreLevel(score) {
-  if (score >= 65) return { label: '危機', color: 'var(--red)', cls: 'signal-red' };
-  if (score >= 55) return { label: '警戒', color: 'var(--yellow)', cls: 'signal-yellow' };
-  if (score >= 45) return { label: '注意', color: 'var(--yellow)', cls: 'signal-yellow' };
-  return { label: '正常', color: 'var(--green)', cls: 'signal-green' };
+  return sigmaLevel((score - 50) / 10);
 }
 
 function renderBankStress() {
@@ -828,19 +834,21 @@ function renderBankStress() {
   const y = d3.scaleLinear().domain([yMin, yMax * 1.05]).range([innerH, 0]);
 
   addAxes(g, x, y, innerW, innerH, '.0f', 3);
-  addThresholdLine(g, y, innerW, 45, '注意', 'var(--yellow)');
-  addThresholdLine(g, y, innerW, 55, '警戒', 'var(--yellow)');
-  addThresholdLine(g, y, innerW, 65, '危機', 'var(--red)');
-  addThresholdLine(g, y, innerW, 50, '基準', 'var(--text-muted)');
+  addThresholdLine(g, y, innerW, 50, '過去平均', 'var(--text-muted)');
+  // 60/70/80がそれぞれ+1σ/+2σ/+3σ。描画域の外に引いても読めないのでdomain内だけ表示する。
+  const yTop = y.domain()[1];
+  if (yTop >= 60) addThresholdLine(g, y, innerW, 60, '+1σ', 'var(--yellow)');
+  if (yTop >= 70) addThresholdLine(g, y, innerW, 70, '+2σ', 'var(--orange)');
+  if (yTop >= 80) addThresholdLine(g, y, innerW, 80, '+3σ', 'var(--red)');
 
   const areaAbove = d3.area()
     .x(d => x(d.date))
-    .y0(d => y(Math.min(d.value, 55)))
-    .y1(d => y(Math.max(d.value, 55)))
+    .y0(d => y(Math.min(d.value, 60)))
+    .y1(d => y(Math.max(d.value, 60)))
     .curve(d3.curveMonotoneX);
 
   g.append('path')
-    .datum(scoreData.filter(d => d.value > 55))
+    .datum(scoreData.filter(d => d.value > 60))
     .attr('fill', 'rgba(239, 68, 68, 0.08)')
     .attr('d', areaAbove);
 
@@ -861,6 +869,16 @@ function renderBankStress() {
   });
 }
 
+// アラートの深刻度。ok < warn < caution < danger の4段階。
+// 既定ラベルは絶対水準を見る指標（HY OAS・変化幅など）向けの語で、
+// 乖離系指標は alert.label に sigmaLevel() のラベルを渡して上書きする。
+const ALERT_LEVELS = {
+  ok: { label: '通常', cls: 'alert-ok' },
+  warn: { label: '注意', cls: 'alert-warn' },
+  caution: { label: '警戒', cls: 'alert-caution' },
+  danger: { label: '異常', cls: 'alert-danger' },
+};
+
 function renderAlerts() {
   const alerts = [];
   const hy = allData.HY, bb = allData.BB, ccc = allData.CCC, emhy = allData.EMHY;
@@ -870,6 +888,7 @@ function renderAlerts() {
   const spreadSig = sigma(diff);
   const cccChg = change20d(ccc);
   const bbChg = change20d(bb);
+  const emChg = change20d(emhy);
   const corrPoint = last(rollingChangeCorrelation(hy, emhy, 20, 30));
   const corrVal = corrPoint ? corrPoint.value : 0;
 
@@ -878,7 +897,7 @@ function renderAlerts() {
   } else {
     const hyVal = hyLast.value;
     if (hyVal > 7) alerts.push({ level: 'danger', msg: `US HY OAS ${hyVal.toFixed(2)}% — 700bps超、信用収縮ゾーン` });
-    else if (hyVal > 5) alerts.push({ level: 'warn', msg: `US HY OAS ${hyVal.toFixed(2)}% — 500bps超、警戒ゾーン` });
+    else if (hyVal > 5) alerts.push({ level: 'warn', msg: `US HY OAS ${hyVal.toFixed(2)}% — 500bps超、注意ゾーン` });
     else alerts.push({ level: 'ok', msg: `US HY OAS ${hyVal.toFixed(2)}% — 平常レンジ` });
   }
 
@@ -886,36 +905,54 @@ function renderAlerts() {
   if (hyChg !== null && hyChg > 100) alerts.push({ level: 'danger', msg: `20日変化 +${hyChg.toFixed(0)}bps — 急速な拡大` });
   else if (hyChg !== null && hyChg > 50) alerts.push({ level: 'warn', msg: `20日変化 +${hyChg.toFixed(0)}bps — 拡大傾向` });
 
-  // CCC-BB差のσ判定で、信用市場の中で弱い銘柄だけが先に崩れる兆候を拾う。
-  if (spreadSig !== null && spreadSig > 2) alerts.push({ level: 'danger', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 質への逃避が加速` });
-  else if (spreadSig !== null && spreadSig > 1) alerts.push({ level: 'warn', msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 信用差別化の兆候` });
-
-  if (cccChg !== null && bbChg !== null && bbChg !== 0 && Math.abs(cccChg / bbChg) > 3) {
-    alerts.push({ level: 'danger', msg: `CCC/BB変化率比 ${(cccChg / bbChg).toFixed(1)}x — パニック初期段階の可能性` });
+  // CCC-BB差は過去1年分布からの乖離しか表さないため、危険度ではなくズレの大きさで報告する。
+  if (spreadSig !== null) {
+    const lvl = sigmaLevel(spreadSig);
+    if (lvl.level !== 'ok') {
+      alerts.push({ level: lvl.level, label: lvl.label, msg: `CCC-BBスプレッド差 ${spreadSig.toFixed(2)}σ — 過去1年比で${lvl.desc}（信用差別化の兆候）` });
+    }
   }
 
-  if (corrVal > 0.8 && change20d(hy) > 0 && change20d(emhy) > 0) {
-    alerts.push({ level: 'danger', msg: `US-EM相関 ${corrVal.toFixed(3)} かつ両方拡大中 — システミックリスク` });
+  // BBに対してCCCがどれだけ突出して動いたか。符号はそのまま表示し、判定は絶対値で行う。
+  if (cccChg !== null && bbChg !== null && bbChg !== 0) {
+    const ratio = cccChg / bbChg;
+    const ratioAbs = Math.abs(ratio);
+    if (ratioAbs > 3) alerts.push({ level: 'danger', msg: `CCC/BB変化率比 ${ratio.toFixed(1)}x — パニック初期段階の可能性` });
+    else if (ratioAbs > 2) alerts.push({ level: 'warn', msg: `CCC/BB変化率比 ${ratio.toFixed(1)}x — 低格付けの動きが突出` });
   }
 
+  // 相関が高いだけではリスクオフと断定できないため、両方が拡大している場合のみ最上位の判定にする。
+  if (corrPoint) {
+    const bothWidening = hyChg !== null && emChg !== null && hyChg > 0 && emChg > 0;
+    if (corrVal > 0.8 && bothWidening) {
+      alerts.push({ level: 'danger', msg: `US-EM相関 ${corrVal.toFixed(3)} かつ両方拡大中 — システミックリスク` });
+    } else if (corrVal > 0.8) {
+      alerts.push({ level: 'warn', msg: `US-EM相関 ${corrVal.toFixed(3)} — 連動性が極めて高い` });
+    } else if (corrVal > 0.6) {
+      alerts.push({ level: 'warn', msg: `US-EM相関 ${corrVal.toFixed(3)} — グローバル連動の高まり` });
+    }
+  }
+
+  // 銀行ストレスScoreもZスコア由来の乖離系。σを併記して尺度を明示する。
   const bsiLast = last(getBankStressIndex().bsi);
   if (bsiLast) {
-    const bankScore = 50 + 10 * bsiLast.value;
-    if (bankScore >= 65) alerts.push({ level: 'danger', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 危機水準` });
-    else if (bankScore >= 55) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 警戒水準` });
-    else if (bankScore >= 45) alerts.push({ level: 'warn', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 注意水準` });
-    else alerts.push({ level: 'ok', msg: `銀行ストレス指数 ${bankScore.toFixed(1)} — 正常` });
+    const z = bsiLast.value;
+    const bankScore = 50 + 10 * z;
+    const lvl = bankScoreLevel(bankScore);
+    const zText = `${z >= 0 ? '+' : ''}${z.toFixed(1)}σ`;
+    const desc = lvl.level === 'ok' ? '過去平均並み' : `過去平均から${lvl.desc}`;
+    alerts.push({ level: lvl.level, label: lvl.label, msg: `銀行ストレス指数 ${bankScore.toFixed(1)}（${zText}） — ${desc}` });
   }
 
-  if (!alerts.some(a => a.level === 'danger' || a.level === 'warn')) {
+  if (!alerts.some(a => a.level !== 'ok')) {
     alerts.push({ level: 'ok', msg: '全指標が平常レンジ内 — 信用市場は安定' });
   }
 
   const logEl = document.getElementById('alertLog');
   logEl.innerHTML = alerts.map(a => {
-    const cls = a.level === 'danger' ? 'alert-danger' : a.level === 'warn' ? 'alert-warn' : 'alert-ok';
-    const label = a.level === 'danger' ? '異常' : a.level === 'warn' ? '注意' : '通常';
-    return `<div class="alert-item"><span class="alert-level ${cls}">${label}</span><span class="alert-msg">${a.msg}</span></div>`;
+    const level = ALERT_LEVELS[a.level] || ALERT_LEVELS.ok;
+    const label = a.label || level.label;
+    return `<div class="alert-item"><span class="alert-level ${level.cls}">${label}</span><span class="alert-msg">${a.msg}</span></div>`;
   }).join('');
 }
 
@@ -930,7 +967,8 @@ const GUIDES = {
     body: `
       <p><strong>「世の中のお金の貸し借りがヤバくなりそうかどうか」を監視する画面</strong>です。経済危機の前には「お金を貸している人たちの不安」が先に数字へ表れます。それをリアルタイムで可視化しています。</p>
       <p><strong>スプレッドとは</strong>：信用が低い企業の金利と、最も安全な金利（米国債）の差。スプレッドの拡大は「お金を貸すのが怖い」と感じる人が増えていることを意味します。</p>
-      <p><strong>アラートログ</strong>：すべての指標を自動判定し、<span style="color:var(--green)">通常</span> / <span style="color:var(--yellow)">注意</span> / <span style="color:var(--red)">異常</span> の3段階で表示します。</p>
+      <p><strong>アラートログ</strong>：すべての指標を自動判定し、<span style="color:var(--green)">通常</span> / <span style="color:var(--yellow)">注意</span> / <span style="color:var(--orange)">警戒</span> / <span style="color:var(--red)">異常</span> の4段階で表示します。</p>
+      <div class="guide-note"><strong>ラベルの読み分け</strong>：米国HY OASや20日変化幅のように<strong>絶対的な大きさに意味がある指標</strong>は「注意／異常」で表示します。一方、CCC-BBスプレッド差と銀行ストレスScoreは<strong>過去と比べてどれだけズレているか（σ）しか表していない</strong>ため、危険度ではなく乖離の大きさとして「上振れ／大きく上振れ／極端」で表示します。σが大きいことは「珍しい」という意味であって、そのまま「危ない」を意味しません。</div>
     `
   },
   oas: {
@@ -940,10 +978,10 @@ const GUIDES = {
       <ul>
         <li><span style="color:var(--green)">5%以下</span>：平常レンジ（歴史的には3%前後が安心の目安）</li>
         <li><span style="color:var(--yellow)">5%超え</span>：注意</li>
-        <li><span style="color:var(--red)">7%超え</span>：警戒（信用収縮ゾーン）</li>
+        <li><span style="color:var(--red)">7%超え</span>：異常（信用収縮ゾーン）</li>
       </ul>
-      <p>「20d」は20営業日（約1ヶ月）前からの変化。<strong>+50bps超で注意、+100bps超で警戒</strong>です。</p>
-      <p><strong>チャートの見方</strong>：線と線の間隔が一定なら市場は落ち着いています。CCC（赤）だけが上へ離れていったら「弱い企業から信用が剥がれ始めている」サイン。点線は注意ライン（5%）と警戒ライン（7%）です。</p>
+      <p>「20d」は20営業日（約1ヶ月）前からの変化。<strong>+50bps超で注意、+100bps超で異常</strong>です。</p>
+      <p><strong>チャートの見方</strong>：線と線の間隔が一定なら市場は落ち着いています。CCC（赤）だけが上へ離れていったら「弱い企業から信用が剥がれ始めている」サイン。点線は注意ライン（5%）と異常ライン（7%）です。</p>
       <div class="guide-note">データ提供元（FRED）の仕様変更により、OAS系列は直近約3年分しか取得できません。「5年」「全期間」を選んでも約3年分しか表示されません。</div>
     `
   },
@@ -952,11 +990,14 @@ const GUIDES = {
     body: `
       <p>「かなり危ない企業（CCC）」と「まあまあの企業（BB）」の金利差です。急に広がると<strong>市場が一番弱いところから見捨て始めている</strong>ことを意味します。</p>
       <ul>
-        <li><span style="color:var(--yellow)">1σ超え</span>：注意（信用差別化の兆候）</li>
-        <li><span style="color:var(--red)">2σ超え</span>：警戒（普段ではありえないレベルの異常値）</li>
+        <li><span style="color:var(--green)">1σ以下</span>：平常域</li>
+        <li><span style="color:var(--yellow)">1σ超え</span>：上振れ（信用差別化の兆候）</li>
+        <li><span style="color:var(--orange)">2σ超え</span>：大きく上振れ</li>
+        <li><span style="color:var(--red)">3σ超え</span>：極端</li>
       </ul>
-      <p>σ（シグマ）は「過去1年の普段の振れ幅からどれだけ外れているか」。水準そのものではなく異常度で判定します。</p>
-      <p><strong>チャートの見方</strong>：点線のμは過去1年の平均、+2σは「これ以上は異常」のライン。赤い面積が大きくなるほど弱い企業と強い企業の差が広がっています。</p>
+      <p>σ（シグマ）は「過去1年の普段の振れ幅からどれだけ外れているか」を表す数値です。</p>
+      <div class="guide-note"><strong>この指標が示すのは「珍しさ」であって「危険度」ではありません。</strong>過去1年が穏やかだった場合、絶対水準としては大したことがなくても2σを超えることがあります。逆に過去1年が荒れていれば、水準が高くてもσは小さく出ます。水準そのものの評価は米国HY OASと合わせて判断してください。</div>
+      <p><strong>チャートの見方</strong>：点線のμは過去1年の平均、+2σは「過去1年の振れ幅から大きく外れた水準」のライン。赤い面積が大きくなるほど弱い企業と強い企業の差が広がっています。</p>
     `
   },
   ratio: {
@@ -966,9 +1007,9 @@ const GUIDES = {
       <ul>
         <li><span style="color:var(--green)">1倍前後</span>：全体が均等に動いている（正常）</li>
         <li><span style="color:var(--yellow)">2倍超え</span>：弱い企業の動きが目立ち始めた（注意）</li>
-        <li><span style="color:var(--red)">3倍超え</span>：弱い企業だけが急速に悪化（パニック初期の可能性・警戒）</li>
+        <li><span style="color:var(--red)">3倍超え</span>：弱い企業だけが急速に悪化（パニック初期の可能性・異常）</li>
       </ul>
-      <div class="guide-note"><strong>この指標は単独で信用しないでください。</strong>判定は比率の絶対値で行われるため、CCCが改善している局面でも警戒表示になることがあります。また分母（BBの変化）がゼロに近いと比率だけが極端に大きく出ます。数字が大きいときは20日変化幅チャートでCCCの実際の動き（bps）を必ず確認してください。計算方法は既知の問題として見直し予定です。</div>
+      <div class="guide-note"><strong>この指標は単独で信用しないでください。</strong>判定は比率の絶対値で行われるため、CCCが改善している局面でも異常表示になることがあります。また分母（BBの変化）がゼロに近いと比率だけが極端に大きく出ます。数字が大きいときは20日変化幅チャートでCCCの実際の動き（bps）を必ず確認してください。計算方法は既知の問題として見直し予定です。</div>
     `
   },
   em: {
@@ -977,11 +1018,11 @@ const GUIDES = {
       <p>米国と新興国の信用市場が<strong>同じ方向に動いているか</strong>を示す数値です。1に近いほど「世界中で同時にお金の貸し借りがおかしくなっている」危険な状態です。</p>
       <ul>
         <li><span style="color:var(--yellow)">0.6超え</span>：連動が強まってきた（注意）</li>
-        <li><span style="color:var(--red)">0.8超え＋両方悪化中</span>：世界同時の信用不安（システミックリスク・警戒）</li>
+        <li><span style="color:var(--red)">0.8超え＋両方悪化中</span>：世界同時の信用不安（システミックリスク・異常）</li>
         <li><span style="color:var(--green)">低い値</span>：問題が一部の地域に限定されている</li>
       </ul>
       <p><strong>チャートの見方</strong>：2本の線が同じ方向に同じタイミングで動いていたら要注意です。</p>
-      <div class="guide-note">数字カードの色は相関値が0.8を超えただけで赤になりますが、チャートとアラートの「全面警戒」は「両方のスプレッドが拡大中」も条件です。カードが赤でもアラートに出ていなければ、相関は高いがどちらかが改善方向ということです。</div>
+      <div class="guide-note">数字カードの色は相関値が0.8を超えただけで赤になりますが、チャートとアラートの「異常」は「両方のスプレッドが拡大中」も条件です。カードが赤でもアラートに出ていなければ、相関は高いがどちらかが改善方向ということです。</div>
     `
   },
   velocity: {
@@ -990,7 +1031,7 @@ const GUIDES = {
       <p>スプレッドが20営業日（約1ヶ月）でどれだけ動いたかをbps（0.01%）で表示します。<strong>水準ではなくスピードを見るチャート</strong>です。じわじわ上がるのと急に上がるのでは意味が全く違います。</p>
       <ul>
         <li><span style="color:var(--yellow)">+50bps超え</span>：拡大傾向（注意）</li>
-        <li><span style="color:var(--red)">+100bps超え</span>：異常な速さで悪化中（警戒）</li>
+        <li><span style="color:var(--red)">+100bps超え</span>：極めて速い悪化（異常）</li>
       </ul>
       <p>短期間の急拡大は、イベントドリブンな悪化（何か起きた）を示しやすいシグナルです。</p>
     `
@@ -1000,13 +1041,13 @@ const GUIDES = {
     body: `
       <p>銀行間の資金調達ストレスを数値化した指標です。企業の信用スプレッドが「一般企業の健康診断」なら、これは「銀行という血管の健康診断」。構成指標をZスコア化して平均し、<strong>Score = 50 + 10 × BSI</strong> として表示します。</p>
       <ul>
-        <li><span style="color:var(--green)">45未満</span>：正常</li>
-        <li><span style="color:var(--yellow)">45以上55未満</span>：注意</li>
-        <li><span style="color:var(--yellow)">55以上65未満</span>：警戒</li>
-        <li><span style="color:var(--red)">65以上</span>：危機</li>
+        <li><span style="color:var(--green)">60未満（+1σ未満）</span>：平常域</li>
+        <li><span style="color:var(--yellow)">60以上（+1σ超）</span>：上振れ</li>
+        <li><span style="color:var(--orange)">70以上（+2σ超）</span>：大きく上振れ</li>
+        <li><span style="color:var(--red)">80以上（+3σ超）</span>：極端</li>
       </ul>
       <div class="guide-note">4指標のうちTED Spreadは2022年、CP Spreadの元データは1997年にFRED側で提供終了しており、<strong>現在のScoreはSOFRとSt.Louis FSIの2指標だけで算出</strong>されています。構成数が時期で変わるため、昔と今のScoreは厳密には同じものさしではありません。</div>
-      <div class="guide-note">定義上「完全に平均的な状態」がちょうど50ですが、45以上が「注意」のため、<strong>市場が普通でも「注意」と表示されます</strong>。50前後の「注意」は実質的に平常と考えてください（既知の問題として見直し予定）。</div>
+      <div class="guide-note"><strong>Scoreは危険度ではなく乖離度です。</strong>50がちょうど過去平均、10ポイントが1σに相当します。示しているのは「過去と比べてどれだけ上振れているか」であって、その水準が危険かどうかは別の話です。構成指標が2本しかない現状では特に、単独で結論を出さず他の指標と合わせて読んでください。</div>
     `
   }
 };
